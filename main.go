@@ -339,12 +339,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items before writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
 
 		// service account keyfile
-		serviceAccountKeyByteArray, err := json.Marshal(*serviceAccountKey)
-		if err != nil {
-			log.Error().Err(err)
-			return status, err
-		}
-		secret.Data["service-account-key.json"] = serviceAccountKeyByteArray
+		secret.Data["service-account-key.json"] = []byte(serviceAccountKey.PrivateKeyData)
 
 		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items after writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
 
