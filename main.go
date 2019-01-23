@@ -245,11 +245,18 @@ func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 	}
 
 	serviceAccountName, ok := secret.Metadata.Annotations[annotationGCPServiceAccountName]
-	if !ok {
-		serviceAccountName = *secret.Metadata.Name
-	}
+	if ok && len(serviceAccountName) >= 3 {
 
-	state.ServiceAccountName = fmt.Sprintf("auto-%v-%v", serviceAccountName, randStringBytesMaskImprSrc(4))
+		maxLength := 30
+		randomStringLength := 4
+
+		maxFirstSectionLength := maxLength - randomStringLength - 1
+		if len(serviceAccountName) > maxFirstSectionLength {
+			serviceAccountName = serviceAccountName[:maxFirstSectionLength]
+		}
+
+		state.ServiceAccountName = fmt.Sprintf("%v-%v", serviceAccountName, randStringBytesMaskImprSrc(4))
+	}
 
 	return
 }
@@ -288,7 +295,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 	}
 
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
-	if desiredState.Enabled == "true" && time.Since(lastAttempt).Minutes() > 15 && currentState.CreatedAt == "" {
+	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.CreatedAt == "" {
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account %v hasn't been created yet, creating one now...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
 

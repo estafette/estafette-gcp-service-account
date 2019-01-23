@@ -20,7 +20,8 @@ cat rbac.yaml | kubectl apply -f -
 Create a google service account with keyfile and the following roles:
 
 ```
-Project IAM Admin
+Service Account Admin
+Service Account Key Admin
 ```
 
 Then create the deployment and other resources with
