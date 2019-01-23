@@ -96,16 +96,6 @@ func main() {
 		Str("goVersion", goVersion).
 		Msg("Starting estafette-gcp-service-account...")
 
-	// create cloudflare api client
-	cfAPIKey := os.Getenv("CF_API_KEY")
-	if cfAPIKey == "" {
-		log.Fatal().Msg("CF_API_KEY is required. Please set CF_API_KEY environment variable to your Cloudflare API key.")
-	}
-	cfAPIEmail := os.Getenv("CF_API_EMAIL")
-	if cfAPIEmail == "" {
-		log.Fatal().Msg("CF_API_EMAIL is required. Please set CF_API_KEY environment variable to your Cloudflare API email.")
-	}
-
 	// create kubernetes api client
 	kubeClient, err := k8s.NewInClusterClient()
 	if err != nil {
