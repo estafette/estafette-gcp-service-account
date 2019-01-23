@@ -398,6 +398,8 @@ func deleteSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, sec
 
 	status = "failed"
 
+	log.Info().Msgf("[%v] Secret %v.%v - Deleting service account because secret has been deleted...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
+
 	if &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
 
 		currentState := getCurrentSecretState(secret)
@@ -412,6 +414,7 @@ func deleteSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, sec
 
 			if deleted {
 				status = "deleted"
+				log.Info().Msgf("[%v] Secret %v.%v - Successfully deleted service account %v...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, currentState.FullServiceAccountName)
 			}
 		}
 
