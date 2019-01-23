@@ -40,6 +40,8 @@ type GCPServiceAccountState struct {
 }
 
 var (
+	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
+
 	version   string
 	branch    string
 	revision  string
@@ -103,7 +105,7 @@ func main() {
 	}
 
 	// create service to Google Cloud IAM
-	iamService := NewGoogleCloudIAMService()
+	iamService := NewGoogleCloudIAMService(*serviceAccountProjectID)
 
 	// start prometheus
 	go func() {
@@ -309,7 +311,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		}
 
 		// create service account and keyfile
-		name, keyfile, err := iamService.CreateServiceAccountWithKey(desiredState.ServiceAccountName)
+		fullServiceAccountName, serviceAccountKey, err := iamService.CreateServiceAccountWithKey(desiredState.ServiceAccountName)
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed creating service account %v with key file", desiredState.ServiceAccountName)
 			return status, err
@@ -318,7 +320,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		// update the secret
 		currentState = desiredState
 		currentState.CreatedAt = time.Now().Format(time.RFC3339)
-		currentState.FullServiceAccountName = name
+		currentState.FullServiceAccountName = fullServiceAccountName
 
 		log.Info().Msgf("[%v] Secret %v.%v - Updating secret because a new service account key file has been created...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
@@ -338,7 +340,12 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items before writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
 
 		// service account keyfile
-		secret.Data["gcp-service-account-keyfile.json"] = []byte(keyfile)
+		serviceAccountKeyByteArray, err := json.Marshal(*serviceAccountKey)
+		if err != nil {
+			log.Error().Err(err)
+			return status, err
+		}
+		secret.Data["service-account-key.json"] = serviceAccountKeyByteArray
 
 		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items after writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
 
