@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -338,8 +339,14 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 
 		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items before writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
 
+		decodedPrivateKeyData, err := base64.StdEncoding.DecodeString(serviceAccountKey.PrivateKeyData)
+		if err != nil {
+			log.Error().Err(err)
+			return status, err
+		}
+
 		// service account keyfile
-		secret.Data["service-account-key.json"] = []byte(serviceAccountKey.PrivateKeyData)
+		secret.Data["service-account-key.json"] = decodedPrivateKeyData
 
 		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items after writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
 
