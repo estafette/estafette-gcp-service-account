@@ -41,6 +41,7 @@ type GCPServiceAccountState struct {
 
 var (
 	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
+	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").Required().String()
 
 	version   string
 	branch    string
@@ -249,13 +250,14 @@ func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 
 		maxLength := 30
 		randomStringLength := 4
+		prefixLength := len(*serviceAccountPrefix)
 
-		maxFirstSectionLength := maxLength - randomStringLength - 1
+		maxFirstSectionLength := maxLength - randomStringLength - 1 - prefixLength - 1
 		if len(serviceAccountName) > maxFirstSectionLength {
 			serviceAccountName = serviceAccountName[:maxFirstSectionLength]
 		}
 
-		state.ServiceAccountName = fmt.Sprintf("%v-%v", serviceAccountName, randStringBytesMaskImprSrc(4))
+		state.ServiceAccountName = fmt.Sprintf("%v-%v-%v", *serviceAccountPrefix, serviceAccountName, randStringBytesMaskImprSrc(4))
 	}
 
 	return

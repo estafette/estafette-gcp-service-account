@@ -57,6 +57,8 @@ spec:
         env:
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: /secrets/google-service-account.json
+        - name: SERVICE_ACCOUNT_PREFIX
+          value: "${SERVICE_ACCOUNT_PREFIX}"
         - name: SERVICE_ACCOUNT_PROJECT_ID
           value: "${SERVICE_ACCOUNT_PROJECT_ID}"
         resources:
