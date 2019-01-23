@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: estafette-gcp-service-account
+  labels:
+    app: estafette-gcp-service-account
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources:
+  - secrets
+  verbs:
+  - list
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: estafette-gcp-service-account
+  labels:
+    app: estafette-gcp-service-account
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: estafette-gcp-service-account
+subjects:
+- kind: ServiceAccount
+  name: estafette-gcp-service-account
+  namespace: estafette
