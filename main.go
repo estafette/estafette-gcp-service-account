@@ -106,7 +106,7 @@ func main() {
 	}
 
 	// create service to Google Cloud IAM
-	iamService := NewGoogleCloudIAMService(*serviceAccountProjectID)
+	iamService := NewGoogleCloudIAMService(*serviceAccountProjectID, *serviceAccountPrefix)
 
 	// start prometheus
 	go func() {
@@ -245,19 +245,9 @@ func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 		state.Enabled = "false"
 	}
 
-	serviceAccountName, ok := secret.Metadata.Annotations[annotationGCPServiceAccountName]
-	if ok && len(serviceAccountName) >= 3 {
-
-		maxLength := 30
-		randomStringLength := 4
-		prefixLength := len(*serviceAccountPrefix)
-
-		maxFirstSectionLength := maxLength - randomStringLength - 1 - prefixLength - 1
-		if len(serviceAccountName) > maxFirstSectionLength {
-			serviceAccountName = serviceAccountName[:maxFirstSectionLength]
-		}
-
-		state.ServiceAccountName = fmt.Sprintf("%v-%v-%v", *serviceAccountPrefix, serviceAccountName, randStringBytesMaskImprSrc(4))
+	state.ServiceAccountName, ok = secret.Metadata.Annotations[annotationGCPServiceAccountName]
+	if !ok {
+		state.ServiceAccountName = ""
 	}
 
 	return

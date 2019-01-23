@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2/google"
@@ -10,12 +11,13 @@ import (
 
 // GoogleCloudIAMService is the service that allows to create service accounts
 type GoogleCloudIAMService struct {
-	service   *iam.Service
-	projectID string
+	service              *iam.Service
+	projectID            string
+	serviceAccountPrefix string
 }
 
 // NewGoogleCloudIAMService returns an initialized GoogleCloudIAMService
-func NewGoogleCloudIAMService(projectID string) *GoogleCloudIAMService {
+func NewGoogleCloudIAMService(projectID, serviceAccountPrefix string) *GoogleCloudIAMService {
 
 	ctx := context.Background()
 	googleClient, err := google.DefaultClient(ctx, iam.CloudPlatformScope)
@@ -29,18 +31,35 @@ func NewGoogleCloudIAMService(projectID string) *GoogleCloudIAMService {
 	}
 
 	return &GoogleCloudIAMService{
-		service:   iamService,
-		projectID: projectID,
+		service:              iamService,
+		projectID:            projectID,
+		serviceAccountPrefix: serviceAccountPrefix,
 	}
 }
 
 // CreateServiceAccount creates a service account
 func (iamService *GoogleCloudIAMService) CreateServiceAccount(serviceAccountName string) (fullServiceAccountName string, err error) {
 
+	if len(serviceAccountName) < 3 {
+		return "", fmt.Errorf("Service account name %v is too short; set at least name of 3 characters or more in the estafette.io/gcp-service-account-name annotation", serviceAccountName)
+	}
+
+	// shorted serviceAccountName for account id if needed
+	const randomStringLength = 4
+	prefixLength := len(*serviceAccountPrefix)
+	maxFirstSectionLength := 30 - randomStringLength - 1 - prefixLength - 1
+
+	shortenedServiceAccountName := serviceAccountName
+	if len(shortenedServiceAccountName) > maxFirstSectionLength {
+		shortenedServiceAccountName = serviceAccountName[:maxFirstSectionLength]
+	}
+
+	randomString := randStringBytesMaskImprSrc(randomStringLength)
+
 	serviceAccount, err := iamService.service.Projects.ServiceAccounts.Create("projects/"+iamService.projectID, &iam.CreateServiceAccountRequest{
-		AccountId: serviceAccountName,
+		AccountId: fmt.Sprintf("%v-%v-%v", iamService.serviceAccountPrefix, shortenedServiceAccountName, randomString),
 		ServiceAccount: &iam.ServiceAccount{
-			DisplayName: serviceAccountName,
+			DisplayName: fmt.Sprintf("%v-%v-%v", iamService.serviceAccountPrefix, serviceAccountName, randomString),
 		},
 	}).Context(context.Background()).Do()
 	if err != nil {
