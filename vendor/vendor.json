@@ -131,6 +131,14 @@
 			"versionExact": "v1.2.0"
 		},
 		{
+			"checksumSHA1": "7NP1qUMF8Kx1y0zANxx0e+oq9Oo=",
+			"path": "github.com/fsnotify/fsnotify",
+			"revision": "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9",
+			"revisionTime": "2018-01-10T05:33:47Z",
+			"version": "v1.4.7",
+			"versionExact": "v1.4.7"
+		},
+		{
 			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "347cf4a86c1cb8d262994d8ef5924d4576c5b331",
@@ -325,6 +333,12 @@
 			"path": "golang.org/x/oauth2/jwt",
 			"revision": "5dab4167f31cbd76b407f1486c86b40748bc5073",
 			"revisionTime": "2019-01-15T08:29:34Z"
+		},
+		{
+			"checksumSHA1": "X3BNLRx0XKxhjhk/TFP7KxkU+V8=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "b90733256f2e882e81d52f9126de08df5615afd9",
+			"revisionTime": "2019-01-23T07:55:40Z"
 		},
 		{
 			"checksumSHA1": "CbpjEkkOeh0fdM/V8xKDdI0AA88=",

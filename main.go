@@ -109,7 +109,11 @@ func main() {
 	}
 
 	// create service to Google Cloud IAM
-	iamService := NewGoogleCloudIAMService(*serviceAccountProjectID, *serviceAccountPrefix)
+	iamService, err := NewGoogleCloudIAMService(*serviceAccountProjectID, *serviceAccountPrefix)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Creating GoogleCloudIAMService failed")
+	}
+	iamService.WatchForKeyfileChanges()
 
 	// start prometheus
 	go func() {

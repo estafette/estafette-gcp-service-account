@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iam/v1"
@@ -13,29 +16,88 @@ import (
 // GoogleCloudIAMService is the service that allows to create service accounts
 type GoogleCloudIAMService struct {
 	service              *iam.Service
+	watcher              *fsnotify.Watcher
 	projectID            string
 	serviceAccountPrefix string
 }
 
 // NewGoogleCloudIAMService returns an initialized GoogleCloudIAMService
-func NewGoogleCloudIAMService(projectID, serviceAccountPrefix string) *GoogleCloudIAMService {
+func NewGoogleCloudIAMService(projectID, serviceAccountPrefix string) (*GoogleCloudIAMService, error) {
 
-	ctx := context.Background()
-	googleClient, err := google.DefaultClient(ctx, iam.CloudPlatformScope)
+	iamService, err := createIAMService()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Creating google cloud client failed")
-	}
-
-	iamService, err := iam.New(googleClient)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Creating google cloud iam service failed")
+		return nil, err
 	}
 
 	return &GoogleCloudIAMService{
 		service:              iamService,
 		projectID:            projectID,
 		serviceAccountPrefix: serviceAccountPrefix,
+	}, nil
+}
+
+func createIAMService() (*iam.Service, error) {
+
+	ctx := context.Background()
+	googleClient, err := google.DefaultClient(ctx, iam.CloudPlatformScope)
+	if err != nil {
+		return nil, err
 	}
+
+	iamService, err := iam.New(googleClient)
+	if err != nil {
+		return nil, err
+	}
+
+	return iamService, nil
+}
+
+// WatchForKeyfileChanges sets up a file watcher to ensure correct behaviour after key rotation
+func (iamService *GoogleCloudIAMService) WatchForKeyfileChanges() {
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Creating file system watcher failed")
+	}
+	defer watcher.Close()
+
+	// done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+
+				log.Info().Interface("event", event).Msg("File watcher triggered event, recreating service...")
+
+				newIAMService, err := createIAMService()
+				if err != nil {
+					log.Fatal().Err(err).Msg("Recreating iam service to pick up key rotation failed")
+				}
+				iamService.service = newIAMService
+
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Warn().Err(err).Msg("File watcher throwed error")
+			}
+		}
+	}()
+
+	keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	keyFileDirectory := filepath.Dir(keyFilePath)
+
+	err = watcher.Add(keyFileDirectory)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Watching service account key file directory failed")
+	}
+
+	iamService.watcher = watcher
+
+	// <-done
 }
 
 // CreateServiceAccount creates a service account
