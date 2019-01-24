@@ -82,22 +82,6 @@ func (iamService *GoogleCloudIAMService) CreateServiceAccountKey(fullServiceAcco
 	return
 }
 
-// CreateServiceAccountWithKey creates a service account with key file and returns the key file
-func (iamService *GoogleCloudIAMService) CreateServiceAccountWithKey(serviceAccountName string) (fullServiceAccountName string, serviceAccountKey *iam.ServiceAccountKey, err error) {
-
-	fullServiceAccountName, err = iamService.CreateServiceAccount(serviceAccountName)
-	if err != nil {
-		return
-	}
-
-	serviceAccountKey, err = iamService.CreateServiceAccountKey(fullServiceAccountName)
-	if err != nil {
-		return
-	}
-
-	return
-}
-
 // DeleteServiceAccount deletes a service account
 func (iamService *GoogleCloudIAMService) DeleteServiceAccount(fullServiceAccountName string) (deleted bool, err error) {
 

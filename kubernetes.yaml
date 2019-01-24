@@ -56,11 +56,13 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
         - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: /secrets/google-service-account.json
+          value: /secrets/service-account-key.json
         - name: SERVICE_ACCOUNT_PREFIX
           value: "${SERVICE_ACCOUNT_PREFIX}"
         - name: SERVICE_ACCOUNT_PROJECT_ID
           value: "${SERVICE_ACCOUNT_PROJECT_ID}"
+        - name: KEY_ROTATION_AFTER_HOURS
+          value: "${KEY_ROTATION_AFTER_HOURS}"
         resources:
           requests:
             cpu: 50m
@@ -81,15 +83,3 @@ spec:
       - name: estafette-gcp-service-account-secrets
         secret:
           secretName: estafette-gcp-service-account-secrets
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: estafette-gcp-service-account-secrets
-  namespace: estafette
-  labels:
-    app: estafette-gcp-service-account
-    team: ${TEAM_NAME}
-type: Opaque
-data:
-  google-service-account.json: ${GOOGLE_SERVICE_ACCOUNT}

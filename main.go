@@ -36,13 +36,14 @@ type GCPServiceAccountState struct {
 	Enabled                string `json:"enabled"`
 	ServiceAccountName     string `json:"serviceAccountName"`
 	FullServiceAccountName string `json:"fullServiceAccountName"`
-	CreatedAt              string `json:"createdAt"`
+	LastRenewed            string `json:"lastRenewed"`
 	LastAttempt            string `json:"lastAttempt"`
 }
 
 var (
 	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
 	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").Required().String()
+	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
 
 	version   string
 	branch    string
@@ -278,6 +279,16 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 
 	status = "failed"
 
+	// parse last renewed time from state
+	lastRenewed := time.Time{}
+	if currentState.LastRenewed != "" {
+		var err error
+		lastRenewed, err = time.Parse(time.RFC3339, currentState.LastRenewed)
+		if err != nil {
+			lastRenewed = time.Time{}
+		}
+	}
+
 	lastAttempt := time.Time{}
 	if currentState.LastAttempt != "" {
 		var err error
@@ -288,7 +299,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 	}
 
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
-	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.CreatedAt == "" {
+	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.FullServiceAccountName == "" {
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account %v hasn't been created yet, creating one now...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
 
@@ -310,19 +321,17 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 			return status, err
 		}
 
-		// create service account and keyfile
-		fullServiceAccountName, serviceAccountKey, err := iamService.CreateServiceAccountWithKey(desiredState.ServiceAccountName)
+		// create service account
+		fullServiceAccountName, err := iamService.CreateServiceAccount(desiredState.ServiceAccountName)
 		if err != nil {
-			log.Error().Err(err).Msgf("Failed creating service account %v with key file", desiredState.ServiceAccountName)
+			log.Error().Err(err).Msgf("Failed creating service account %v", desiredState.ServiceAccountName)
 			return status, err
 		}
 
 		// update the secret
-		currentState = desiredState
-		currentState.CreatedAt = time.Now().Format(time.RFC3339)
 		currentState.FullServiceAccountName = fullServiceAccountName
 
-		log.Info().Msgf("[%v] Secret %v.%v - Updating secret because a new service account key file has been created...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
+		log.Info().Msgf("[%v] Secret %v.%v - Updating secret because a new service account has been created...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
 		// serialize state and store it in the annotation
 		gcpServiceAccountStateByteArray, err = json.Marshal(currentState)
@@ -332,12 +341,50 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		}
 		secret.Metadata.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
 
+		status = "succeeded"
+
+		log.Info().Msgf("[%v] Secret %v.%v - Service account keyfile has been stored in secret successfully...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
+
+		return status, nil
+	}
+
+	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
+	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.FullServiceAccountName != "" && time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
+
+		log.Info().Msgf("[%v] Secret %v.%v - Service account %v key is up for rotation, requesting a new one now...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
+
+		// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
+		currentState.LastAttempt = time.Now().Format(time.RFC3339)
+
+		// serialize state and store it in the annotation
+		gcpServiceAccountStateByteArray, err := json.Marshal(currentState)
+		if err != nil {
+			log.Error().Err(err)
+			return status, err
+		}
+		secret.Metadata.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
+
+		// update secret, with last attempt; this will fire an event for the watcher, but this shouldn't lead to any action because storing the last attempt locks the secret for 15 minutes
+		err = kubeClient.Update(context.Background(), secret)
+		if err != nil {
+			log.Error().Err(err)
+			return status, err
+		}
+
+		// create service account
+		serviceAccountKey, err := iamService.CreateServiceAccountKey(desiredState.ServiceAccountName)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed creating service account %v key", desiredState.ServiceAccountName)
+			return status, err
+		}
+
+		// update the secret
+		currentState.LastRenewed = time.Now().Format(time.RFC3339)
+
 		// store the key file
 		if secret.Data == nil {
 			secret.Data = make(map[string][]byte)
 		}
-
-		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items before writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
 
 		decodedPrivateKeyData, err := base64.StdEncoding.DecodeString(serviceAccountKey.PrivateKeyData)
 		if err != nil {
@@ -348,8 +395,6 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		// service account keyfile
 		secret.Data["service-account-key.json"] = decodedPrivateKeyData
 
-		log.Info().Msgf("[%v] Secret %v.%v - Secret has %v data items after writing the key file...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, len(secret.Data))
-
 		// update secret, because the data and state annotation have changed
 		err = kubeClient.Update(context.Background(), secret)
 		if err != nil {
@@ -359,7 +404,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 
 		status = "succeeded"
 
-		log.Info().Msgf("[%v] Secret %v.%v - Service account keyfile has been stored in secret successfully...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
+		log.Info().Msgf("[%v] Secret %v.%v - Service account keyfile has been renewd successfully...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
 		return status, nil
 	}

@@ -38,6 +38,8 @@ stages:
       COPY ca-certificates.crt /etc/ssl/certs/
       COPY ${ESTAFETTE_GIT_NAME} /
 
+      ENV KEY_ROTATION_AFTER_HOURS="360"
+
       ENTRYPOINT ["/${ESTAFETTE_GIT_NAME}"]
     repositories:
     - estafette
