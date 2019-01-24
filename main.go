@@ -188,6 +188,12 @@ func main() {
 	}(waitGroup)
 
 	go func(waitGroup *sync.WaitGroup) {
+
+		// sleep random time before polling in order to avoid race conditions (look at waitgroups in the future)
+		sleepTime := applyJitter(30)
+		log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
+		time.Sleep(time.Duration(sleepTime) * time.Second)
+
 		// loop indefinitely
 		for {
 
