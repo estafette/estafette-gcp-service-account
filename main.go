@@ -35,10 +35,16 @@ type GCPServiceAccountState struct {
 }
 
 var (
-	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
-	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").Required().String()
-	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
-	purgeKeysAfterHours     = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Required().Int()
+	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").String()
+	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").String()
+	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Int()
+	purgeKeysAfterHours     = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Int()
+
+	app       string
+	version   string
+	branch    string
+	revision  string
+	buildDate string
 
 	// define prometheus counter
 	certificateTotals = prometheus.NewCounterVec(
@@ -60,7 +66,7 @@ func main() {
 	// parse command line parameters
 	kingpin.Parse()
 
-	foundation.InitLogging()
+	foundation.InitLogging(app, version, branch, revision, buildDate)
 
 	// create kubernetes api client
 	kubeClient, err := k8s.NewInClusterClient()

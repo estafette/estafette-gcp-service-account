@@ -20,11 +20,6 @@ import (
 )
 
 var (
-	app       string
-	version   string
-	branch    string
-	revision  string
-	buildDate string
 	goVersion = runtime.Version()
 
 	// seed random number
@@ -32,7 +27,7 @@ var (
 )
 
 // InitLogging initializes logging to log everything as json
-func InitLogging() {
+func InitLogging(app, version, branch, revision, buildDate string) {
 	// log as severity for stackdriver logging to recognize the level
 	zerolog.LevelFieldName = "severity"
 
