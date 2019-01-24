@@ -108,16 +108,20 @@ func (iamService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAcco
 
 		// parse validAfterTime to get key creation date
 		keyCreatedAt := time.Time{}
-		if key.ValidAfterTime != "" {
-			var err error
-			keyCreatedAt, err = time.Parse(time.RFC3339, key.ValidAfterTime)
-			if err != nil {
-				keyCreatedAt = time.Time{}
-			}
+		if key.ValidAfterTime == "" {
+			log.Warn().Msgf("Key %v has empty ValidAfterTime, skipping...", key.Name)
+			continue
 		}
 
+		keyCreatedAt, err = time.Parse(time.RFC3339, key.ValidAfterTime)
+		if err != nil {
+			log.Warn().Msgf("Can't parse ValidAfterTime %v for key %v, skipping...", key.ValidAfterTime, key.Name)
+			continue
+		}
+
+		// check if it's old enough to purge
 		if time.Since(keyCreatedAt).Hours() > float64(purgeKeysAfterHours) {
-			log.Info().Msgf("Deleting key %v create at %v which is more than %v hours old...", key.Name, key.ValidAfterTime, purgeKeysAfterHours)
+			log.Info().Msgf("Deleting key %v created at %v (parsed to %v) because it is more than %v hours old...", key.Name, key.ValidAfterTime, keyCreatedAt, purgeKeysAfterHours)
 			_, err := iamService.DeleteServiceAccountKey(key)
 			if err != nil {
 				return err
