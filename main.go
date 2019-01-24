@@ -193,8 +193,6 @@ func main() {
 
 			// get secrets for all namespaces
 			log.Info().Msg("Listing secrets for all namespaces...")
-
-			log.Info().Msg("Listing services for all namespaces...")
 			var secrets corev1.SecretList
 			err := kubeClient.List(context.Background(), k8s.AllNamespaces, &secrets)
 			if err != nil {
@@ -561,6 +559,13 @@ func updateSecret(kubeClient *k8s.Client, secret *corev1.Secret, currentState GC
 	err = kubeClient.Update(context.Background(), secret)
 	if err != nil {
 		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed updating current state in secret", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
+		return err
+	}
+
+	// refresh secret after update
+	err = kubeClient.Get(context.Background(), *secret.Metadata.Namespace, *secret.Metadata.Name, secret)
+	if err != nil {
+		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed refreshing secret after update", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 		return err
 	}
 
