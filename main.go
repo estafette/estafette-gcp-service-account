@@ -113,7 +113,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Creating GoogleCloudIAMService failed")
 	}
-	go iamService.WatchForKeyfileChanges()
+	iamService.WatchForKeyfileChanges()
 
 	// start prometheus
 	go func() {

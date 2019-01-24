@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -24,86 +25,106 @@ type GoogleCloudIAMService struct {
 // NewGoogleCloudIAMService returns an initialized GoogleCloudIAMService
 func NewGoogleCloudIAMService(projectID, serviceAccountPrefix string) (*GoogleCloudIAMService, error) {
 
-	iamService, err := createIAMService()
+	googleCloudIAMService := &GoogleCloudIAMService{
+		projectID:            projectID,
+		serviceAccountPrefix: serviceAccountPrefix,
+	}
+
+	err := googleCloudIAMService.createIAMService()
 	if err != nil {
 		return nil, err
 	}
 
-	return &GoogleCloudIAMService{
-		service:              iamService,
-		projectID:            projectID,
-		serviceAccountPrefix: serviceAccountPrefix,
-	}, nil
+	return googleCloudIAMService, nil
 }
 
-func createIAMService() (*iam.Service, error) {
+func (googleCloudIAMService *GoogleCloudIAMService) createIAMService() error {
 
 	ctx := context.Background()
 	googleClient, err := google.DefaultClient(ctx, iam.CloudPlatformScope)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	iamService, err := iam.New(googleClient)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return iamService, nil
+	googleCloudIAMService.service = iamService
+
+	return nil
 }
 
 // WatchForKeyfileChanges sets up a file watcher to ensure correct behaviour after key rotation
-func (iamService *GoogleCloudIAMService) WatchForKeyfileChanges() {
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Creating file system watcher failed")
-	}
-	defer watcher.Close()
-
-	done := make(chan bool)
+func (googleCloudIAMService *GoogleCloudIAMService) WatchForKeyfileChanges() {
+	// copied from https://github.com/spf13/viper/blob/v1.3.1/viper.go#L282-L348
+	initWG := sync.WaitGroup{}
+	initWG.Add(1)
 	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-
-				log.Info().Interface("event", event).Msg("File watcher triggered event, recreating service...")
-
-				newIAMService, err := createIAMService()
-				if err != nil {
-					log.Fatal().Err(err).Msg("Recreating iam service to pick up key rotation failed")
-				}
-				iamService.service = newIAMService
-
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Warn().Err(err).Msg("File watcher throwed error")
-			}
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			log.Fatal().Err(err).Msg("Creating file system watcher failed")
 		}
+		defer watcher.Close()
+
+		// we have to watch the entire directory to pick up renames/atomic saves in a cross-platform way
+		keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		keyFile := filepath.Clean(keyFilePath)
+		keyFileDir, _ := filepath.Split(keyFile)
+		realKeyFile, _ := filepath.EvalSymlinks(keyFilePath)
+
+		eventsWG := sync.WaitGroup{}
+		eventsWG.Add(1)
+		go func() {
+			for {
+				select {
+				case event, ok := <-watcher.Events:
+					if !ok { // 'Events' channel is closed
+						eventsWG.Done()
+						return
+					}
+					currentKeyFile, _ := filepath.EvalSymlinks(keyFilePath)
+					// we only care about the key file with the following cases:
+					// 1 - if the key file was modified or created
+					// 2 - if the real path to the key file changed (eg: k8s ConfigMap/Secret replacement)
+					const writeOrCreateMask = fsnotify.Write | fsnotify.Create
+					if (filepath.Clean(event.Name) == keyFile &&
+						event.Op&writeOrCreateMask != 0) ||
+						(currentKeyFile != "" && currentKeyFile != realKeyFile) {
+						realKeyFile = currentKeyFile
+
+						log.Info().Interface("event", event).Msg("File watcher triggered event, recreating service...")
+
+						err := googleCloudIAMService.createIAMService()
+						if err != nil {
+							log.Fatal().Err(err).Msg("Recreating iam service to pick up key rotation failed")
+						}
+
+					} else if filepath.Clean(event.Name) == keyFile &&
+						event.Op&fsnotify.Remove&fsnotify.Remove != 0 {
+						eventsWG.Done()
+						return
+					}
+
+				case err, ok := <-watcher.Errors:
+					if ok { // 'Errors' channel is not closed
+						log.Printf("watcher error: %v\n", err)
+					}
+					eventsWG.Done()
+					return
+				}
+			}
+		}()
+		watcher.Add(keyFileDir)
+		initWG.Done()   // done initalizing the watch in this go routine, so the parent routine can move on...
+		eventsWG.Wait() // now, wait for event loop to end in this go-routine...
 	}()
-
-	keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	keyFileDirectory := filepath.Dir(keyFilePath)
-
-	log.Info().Msgf("Setting up file watcher for directory %v...", keyFileDirectory)
-
-	err = watcher.Add(keyFileDirectory)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Watching service account key file directory failed")
-	}
-
-	iamService.watcher = watcher
-
-	<-done
+	initWG.Wait() // make sure that the go routine above fully ended before returning
 }
 
 // CreateServiceAccount creates a service account
-func (iamService *GoogleCloudIAMService) CreateServiceAccount(serviceAccountName string) (fullServiceAccountName string, err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccount(serviceAccountName string) (fullServiceAccountName string, err error) {
 
 	if len(serviceAccountName) < 3 {
 		return "", fmt.Errorf("Service account name %v is too short; set at least name of 3 characters or more in the estafette.io/gcp-service-account-name annotation", serviceAccountName)
@@ -121,10 +142,10 @@ func (iamService *GoogleCloudIAMService) CreateServiceAccount(serviceAccountName
 
 	randomString := randStringBytesMaskImprSrc(randomStringLength)
 
-	serviceAccount, err := iamService.service.Projects.ServiceAccounts.Create("projects/"+iamService.projectID, &iam.CreateServiceAccountRequest{
-		AccountId: fmt.Sprintf("%v-%v-%v", iamService.serviceAccountPrefix, shortenedServiceAccountName, randomString),
+	serviceAccount, err := googleCloudIAMService.service.Projects.ServiceAccounts.Create("projects/"+googleCloudIAMService.projectID, &iam.CreateServiceAccountRequest{
+		AccountId: fmt.Sprintf("%v-%v-%v", googleCloudIAMService.serviceAccountPrefix, shortenedServiceAccountName, randomString),
 		ServiceAccount: &iam.ServiceAccount{
-			DisplayName: fmt.Sprintf("%v-%v-%v", iamService.serviceAccountPrefix, serviceAccountName, randomString),
+			DisplayName: fmt.Sprintf("%v-%v-%v", googleCloudIAMService.serviceAccountPrefix, serviceAccountName, randomString),
 		},
 	}).Context(context.Background()).Do()
 	if err != nil {
@@ -137,9 +158,9 @@ func (iamService *GoogleCloudIAMService) CreateServiceAccount(serviceAccountName
 }
 
 // CreateServiceAccountKey creates a key file for an existing account
-func (iamService *GoogleCloudIAMService) CreateServiceAccountKey(fullServiceAccountName string) (serviceAccountKey *iam.ServiceAccountKey, err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccountKey(fullServiceAccountName string) (serviceAccountKey *iam.ServiceAccountKey, err error) {
 
-	serviceAccountKey, err = iamService.service.Projects.ServiceAccounts.Keys.Create(fullServiceAccountName, &iam.CreateServiceAccountKeyRequest{}).Context(context.Background()).Do()
+	serviceAccountKey, err = googleCloudIAMService.service.Projects.ServiceAccounts.Keys.Create(fullServiceAccountName, &iam.CreateServiceAccountKeyRequest{}).Context(context.Background()).Do()
 	if err != nil {
 		return
 	}
@@ -148,9 +169,9 @@ func (iamService *GoogleCloudIAMService) CreateServiceAccountKey(fullServiceAcco
 }
 
 // ListServiceAccountKeys lists all keys for an existing account
-func (iamService *GoogleCloudIAMService) ListServiceAccountKeys(fullServiceAccountName string) (serviceAccountKeys []*iam.ServiceAccountKey, err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) ListServiceAccountKeys(fullServiceAccountName string) (serviceAccountKeys []*iam.ServiceAccountKey, err error) {
 
-	keyListResponse, err := iamService.service.Projects.ServiceAccounts.Keys.List(fullServiceAccountName).Context(context.Background()).Do()
+	keyListResponse, err := googleCloudIAMService.service.Projects.ServiceAccounts.Keys.List(fullServiceAccountName).Context(context.Background()).Do()
 	if err != nil {
 		return
 	}
@@ -161,9 +182,9 @@ func (iamService *GoogleCloudIAMService) ListServiceAccountKeys(fullServiceAccou
 }
 
 // PurgeServiceAccountKeys purges all keys older than x hours for an existing account
-func (iamService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAccountName string, purgeKeysAfterHours int) (err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAccountName string, purgeKeysAfterHours int) (err error) {
 
-	serviceAccountKeys, err := iamService.ListServiceAccountKeys(fullServiceAccountName)
+	serviceAccountKeys, err := googleCloudIAMService.ListServiceAccountKeys(fullServiceAccountName)
 	if err != nil {
 		return
 	}
@@ -186,7 +207,7 @@ func (iamService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAcco
 		// check if it's old enough to purge
 		if time.Since(keyCreatedAt).Hours() > float64(purgeKeysAfterHours) {
 			log.Info().Msgf("Deleting key %v created at %v (parsed to %v) because it is more than %v hours old...", key.Name, key.ValidAfterTime, keyCreatedAt, purgeKeysAfterHours)
-			_, err := iamService.DeleteServiceAccountKey(key)
+			_, err := googleCloudIAMService.DeleteServiceAccountKey(key)
 			if err != nil {
 				return err
 			}
@@ -197,9 +218,9 @@ func (iamService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAcco
 }
 
 // DeleteServiceAccountKey deletes a key file for an existing account
-func (iamService *GoogleCloudIAMService) DeleteServiceAccountKey(serviceAccountKey *iam.ServiceAccountKey) (deleted bool, err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) DeleteServiceAccountKey(serviceAccountKey *iam.ServiceAccountKey) (deleted bool, err error) {
 
-	_, err = iamService.service.Projects.ServiceAccounts.Keys.Delete(serviceAccountKey.Name).Context(context.Background()).Do()
+	_, err = googleCloudIAMService.service.Projects.ServiceAccounts.Keys.Delete(serviceAccountKey.Name).Context(context.Background()).Do()
 	if err != nil {
 		return
 	}
@@ -210,9 +231,9 @@ func (iamService *GoogleCloudIAMService) DeleteServiceAccountKey(serviceAccountK
 }
 
 // DeleteServiceAccount deletes a service account
-func (iamService *GoogleCloudIAMService) DeleteServiceAccount(fullServiceAccountName string) (deleted bool, err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) DeleteServiceAccount(fullServiceAccountName string) (deleted bool, err error) {
 
-	resp, err := iamService.service.Projects.ServiceAccounts.Delete(fullServiceAccountName).Context(context.Background()).Do()
+	resp, err := googleCloudIAMService.service.Projects.ServiceAccounts.Delete(fullServiceAccountName).Context(context.Background()).Do()
 	if err != nil {
 		return
 	}
