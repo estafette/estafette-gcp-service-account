@@ -131,12 +131,18 @@
 			"versionExact": "v1.2.0"
 		},
 		{
+			"checksumSHA1": "M4g5Tsws6d1makHHxjy5L1kdcFQ=",
+			"path": "github.com/estafette/estafette-foundation",
+			"revision": "d0c44043b9419350ec2317070331e89ca325739e",
+			"revisionTime": "2019-01-24T19:45:36Z",
+			"version": "0.0.1",
+			"versionExact": "0.0.1"
+		},
+		{
 			"checksumSHA1": "7NP1qUMF8Kx1y0zANxx0e+oq9Oo=",
 			"path": "github.com/fsnotify/fsnotify",
-			"revision": "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9",
-			"revisionTime": "2018-01-10T05:33:47Z",
-			"version": "v1.4.7",
-			"versionExact": "v1.4.7"
+			"revision": "ccc981bf80385c528a65fbfdd49bf2d8da22aa23",
+			"revisionTime": "2018-08-30T22:02:26Z"
 		},
 		{
 			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
@@ -157,28 +163,22 @@
 			"revisionTime": "2018-12-26T10:54:42Z"
 		},
 		{
-			"checksumSHA1": "72GXEVomX5rdB9CRPs9FR97lJCs=",
+			"checksumSHA1": "yu0CGq8MlDYJ8wLGjfjiMwUt1ps=",
 			"path": "github.com/prometheus/client_golang/prometheus",
-			"revision": "505eaef017263e299324067d40ca2c48f6a2cf50",
-			"revisionTime": "2018-12-07T10:51:17Z",
-			"version": "v0.9.2",
-			"versionExact": "v0.9.2"
+			"revision": "d5f63107bfcac90d692baa94bd0064132e1f1d0d",
+			"revisionTime": "2019-01-23T15:39:45Z"
 		},
 		{
 			"checksumSHA1": "UBqhkyjCz47+S19MVTigxJ2VjVQ=",
 			"path": "github.com/prometheus/client_golang/prometheus/internal",
-			"revision": "505eaef017263e299324067d40ca2c48f6a2cf50",
-			"revisionTime": "2018-12-07T10:51:17Z",
-			"version": "v0.9.2",
-			"versionExact": "v0.9.2"
+			"revision": "d5f63107bfcac90d692baa94bd0064132e1f1d0d",
+			"revisionTime": "2019-01-23T15:39:45Z"
 		},
 		{
-			"checksumSHA1": "wJzzub/0w2espYvar3lylwHXBAk=",
+			"checksumSHA1": "wR/mIioOTUWo2HmQaACuux6MJ5A=",
 			"path": "github.com/prometheus/client_golang/prometheus/promhttp",
-			"revision": "505eaef017263e299324067d40ca2c48f6a2cf50",
-			"revisionTime": "2018-12-07T10:51:17Z",
-			"version": "v0.9.2",
-			"versionExact": "v0.9.2"
+			"revision": "d5f63107bfcac90d692baa94bd0064132e1f1d0d",
+			"revisionTime": "2019-01-23T15:39:45Z"
 		},
 		{
 			"checksumSHA1": "V8xkqgmP66sq2ZW4QO5wi9a4oZE=",
@@ -229,36 +229,28 @@
 			"revisionTime": "2019-01-17T18:46:57Z"
 		},
 		{
-			"checksumSHA1": "emRlM2McT42onIqVKki4o3WBcxo=",
+			"checksumSHA1": "NjPiRUX/09c3SbZUDFqTR9keb2w=",
 			"path": "github.com/rs/zerolog",
-			"revision": "8747b7b3a51b5d08ee7ac50eaf4869edaf9f714a",
-			"revisionTime": "2018-11-20T18:54:42Z",
-			"version": "v1.11.0",
-			"versionExact": "v1.11.0"
+			"revision": "aa55558e4cb2e8f05cd079342d430f77e946d00a",
+			"revisionTime": "2019-01-03T19:04:23Z"
 		},
 		{
 			"checksumSHA1": "73NzoKIiJU6h4v6hg9eM4t7V/zw=",
 			"path": "github.com/rs/zerolog/internal/cbor",
-			"revision": "8747b7b3a51b5d08ee7ac50eaf4869edaf9f714a",
-			"revisionTime": "2018-11-20T18:54:42Z",
-			"version": "v1.11.0",
-			"versionExact": "v1.11.0"
+			"revision": "aa55558e4cb2e8f05cd079342d430f77e946d00a",
+			"revisionTime": "2019-01-03T19:04:23Z"
 		},
 		{
 			"checksumSHA1": "e0b96rsdqg3fNtCDQOdZA4M+MNo=",
 			"path": "github.com/rs/zerolog/internal/json",
-			"revision": "8747b7b3a51b5d08ee7ac50eaf4869edaf9f714a",
-			"revisionTime": "2018-11-20T18:54:42Z",
-			"version": "v1.11.0",
-			"versionExact": "v1.11.0"
+			"revision": "aa55558e4cb2e8f05cd079342d430f77e946d00a",
+			"revisionTime": "2019-01-03T19:04:23Z"
 		},
 		{
 			"checksumSHA1": "GrCvxT3h3vAVIwGe8bFAilXjgVA=",
 			"path": "github.com/rs/zerolog/log",
-			"revision": "8747b7b3a51b5d08ee7ac50eaf4869edaf9f714a",
-			"revisionTime": "2018-11-20T18:54:42Z",
-			"version": "v1.11.0",
-			"versionExact": "v1.11.0"
+			"revision": "aa55558e4cb2e8f05cd079342d430f77e946d00a",
+			"revisionTime": "2019-01-03T19:04:23Z"
 		},
 		{
 			"checksumSHA1": "cIbx/lKONK5Bz/DROB9K51qbkAk=",

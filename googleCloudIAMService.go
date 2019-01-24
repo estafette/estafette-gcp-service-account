@@ -3,9 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -25,102 +22,22 @@ type GoogleCloudIAMService struct {
 // NewGoogleCloudIAMService returns an initialized GoogleCloudIAMService
 func NewGoogleCloudIAMService(projectID, serviceAccountPrefix string) (*GoogleCloudIAMService, error) {
 
-	googleCloudIAMService := &GoogleCloudIAMService{
-		projectID:            projectID,
-		serviceAccountPrefix: serviceAccountPrefix,
-	}
-
-	err := googleCloudIAMService.createIAMService()
+	ctx := context.Background()
+	googleClient, err := google.DefaultClient(ctx, iam.CloudPlatformScope)
 	if err != nil {
 		return nil, err
 	}
 
-	return googleCloudIAMService, nil
-}
-
-func (googleCloudIAMService *GoogleCloudIAMService) createIAMService() error {
-
-	ctx := context.Background()
-	googleClient, err := google.DefaultClient(ctx, iam.CloudPlatformScope)
-	if err != nil {
-		return err
-	}
-
 	iamService, err := iam.New(googleClient)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	googleCloudIAMService.service = iamService
-
-	return nil
-}
-
-// WatchForKeyfileChanges sets up a file watcher to ensure correct behaviour after key rotation
-func (googleCloudIAMService *GoogleCloudIAMService) WatchForKeyfileChanges() {
-	// copied from https://github.com/spf13/viper/blob/v1.3.1/viper.go#L282-L348
-	initWG := sync.WaitGroup{}
-	initWG.Add(1)
-	go func() {
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			log.Fatal().Err(err).Msg("Creating file system watcher failed")
-		}
-		defer watcher.Close()
-
-		// we have to watch the entire directory to pick up renames/atomic saves in a cross-platform way
-		keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-		keyFile := filepath.Clean(keyFilePath)
-		keyFileDir, _ := filepath.Split(keyFile)
-		realKeyFile, _ := filepath.EvalSymlinks(keyFilePath)
-
-		eventsWG := sync.WaitGroup{}
-		eventsWG.Add(1)
-		go func() {
-			for {
-				select {
-				case event, ok := <-watcher.Events:
-					if !ok { // 'Events' channel is closed
-						eventsWG.Done()
-						return
-					}
-					currentKeyFile, _ := filepath.EvalSymlinks(keyFilePath)
-					// we only care about the key file with the following cases:
-					// 1 - if the key file was modified or created
-					// 2 - if the real path to the key file changed (eg: k8s ConfigMap/Secret replacement)
-					const writeOrCreateMask = fsnotify.Write | fsnotify.Create
-					if (filepath.Clean(event.Name) == keyFile &&
-						event.Op&writeOrCreateMask != 0) ||
-						(currentKeyFile != "" && currentKeyFile != realKeyFile) {
-						realKeyFile = currentKeyFile
-
-						log.Info().Interface("event", event).Msg("File watcher triggered event, recreating service...")
-
-						err := googleCloudIAMService.createIAMService()
-						if err != nil {
-							log.Fatal().Err(err).Msg("Recreating iam service to pick up key rotation failed")
-						}
-
-					} else if filepath.Clean(event.Name) == keyFile &&
-						event.Op&fsnotify.Remove&fsnotify.Remove != 0 {
-						eventsWG.Done()
-						return
-					}
-
-				case err, ok := <-watcher.Errors:
-					if ok { // 'Errors' channel is not closed
-						log.Printf("watcher error: %v\n", err)
-					}
-					eventsWG.Done()
-					return
-				}
-			}
-		}()
-		watcher.Add(keyFileDir)
-		initWG.Done()   // done initalizing the watch in this go routine, so the parent routine can move on...
-		eventsWG.Wait() // now, wait for event loop to end in this go-routine...
-	}()
-	initWG.Wait() // make sure that the go routine above fully ended before returning
+	return &GoogleCloudIAMService{
+		service:              iamService,
+		projectID:            projectID,
+		serviceAccountPrefix: serviceAccountPrefix,
+	}, nil
 }
 
 // CreateServiceAccount creates a service account
