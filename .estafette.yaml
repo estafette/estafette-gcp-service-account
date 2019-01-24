@@ -24,7 +24,7 @@ stages:
       GOOS: linux
     commands:
     - go test `go list ./... | grep -v /vendor/`
-    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-X github.com/estafette/estafette-foundation.app=${ESTAFETTE_LABEL_APP} -X github.com/estafette/estafette-foundation.version=${ESTAFETTE_BUILD_VERSION} -X github.com/estafette/estafette-foundation.revision=${ESTAFETTE_GIT_REVISION} -X github.com/estafette/estafette-foundation.branch=${ESTAFETTE_GIT_BRANCH} -X github.com/estafette/estafette-foundation.buildDate=${ESTAFETTE_BUILD_DATETIME}" -o ./publish/${ESTAFETTE_LABEL_APP} .
+    - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-X github.com/estafette/estafette-foundation/foundation.app=${ESTAFETTE_LABEL_APP} -X github.com/estafette/estafette-foundation/foundation.version=${ESTAFETTE_BUILD_VERSION} -X github.com/estafette/estafette-foundation/foundation.revision=${ESTAFETTE_GIT_REVISION} -X github.com/estafette/estafette-foundation/foundation.branch=${ESTAFETTE_GIT_BRANCH} -X github.com/estafette/estafette-foundation/foundation.buildDate=${ESTAFETTE_BUILD_DATETIME}" -o ./publish/${ESTAFETTE_LABEL_APP} .
 
   bake:
     image: extensions/docker:dev
