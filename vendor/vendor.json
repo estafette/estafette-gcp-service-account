@@ -131,12 +131,12 @@
 			"versionExact": "v1.2.0"
 		},
 		{
-			"checksumSHA1": "M4g5Tsws6d1makHHxjy5L1kdcFQ=",
+			"checksumSHA1": "+2MZqU172y6neBgpBcDkdaj5lhM=",
 			"path": "github.com/estafette/estafette-foundation",
-			"revision": "d0c44043b9419350ec2317070331e89ca325739e",
-			"revisionTime": "2019-01-24T19:45:36Z",
-			"version": "0.0.1",
-			"versionExact": "0.0.1"
+			"revision": "258e727ae2da406f3f75778a7628ed095c2308df",
+			"revisionTime": "2019-01-24T20:23:46Z",
+			"version": "0.0.2",
+			"versionExact": "0.0.2"
 		},
 		{
 			"checksumSHA1": "7NP1qUMF8Kx1y0zANxx0e+oq9Oo=",

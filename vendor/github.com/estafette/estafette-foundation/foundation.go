@@ -31,6 +31,7 @@ var (
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
+// InitLogging initializes logging to log everything as json
 func InitLogging() {
 	// log as severity for stackdriver logging to recognize the level
 	zerolog.LevelFieldName = "severity"
@@ -38,7 +39,7 @@ func InitLogging() {
 	// set some default fields added to all logs
 	log.Logger = zerolog.New(os.Stdout).With().
 		Timestamp().
-		Str("app", "estafette-gcp-service-account").
+		Str("app", app).
 		Str("version", version).
 		Logger()
 
