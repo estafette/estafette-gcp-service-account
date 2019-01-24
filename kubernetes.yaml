@@ -63,6 +63,8 @@ spec:
           value: "${SERVICE_ACCOUNT_PROJECT_ID}"
         - name: KEY_ROTATION_AFTER_HOURS
           value: "${KEY_ROTATION_AFTER_HOURS}"
+        - name: PURGE_KEYS_AFTER_HOURS
+          value: "${PURGE_KEYS_AFTER_HOURS}"
         resources:
           requests:
             cpu: 50m

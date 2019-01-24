@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2/google"
@@ -78,6 +79,64 @@ func (iamService *GoogleCloudIAMService) CreateServiceAccountKey(fullServiceAcco
 	if err != nil {
 		return
 	}
+
+	return
+}
+
+// ListServiceAccountKeys lists all keys for an existing account
+func (iamService *GoogleCloudIAMService) ListServiceAccountKeys(fullServiceAccountName string) (serviceAccountKeys []*iam.ServiceAccountKey, err error) {
+
+	keyListResponse, err := iamService.service.Projects.ServiceAccounts.Keys.List(fullServiceAccountName).Context(context.Background()).Do()
+	if err != nil {
+		return
+	}
+
+	serviceAccountKeys = keyListResponse.Keys
+
+	return
+}
+
+// PurgeServiceAccountKeys purges all keys older than x hours for an existing account
+func (iamService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAccountName string, purgeKeysAfterHours int) (err error) {
+
+	serviceAccountKeys, err := iamService.ListServiceAccountKeys(fullServiceAccountName)
+	if err != nil {
+		return
+	}
+
+	for _, key := range serviceAccountKeys {
+
+		// parse validAfterTime to get key creation date
+		keyCreatedAt := time.Time{}
+		if key.ValidAfterTime != "" {
+			var err error
+			keyCreatedAt, err = time.Parse(time.RFC3339, key.ValidAfterTime)
+			if err != nil {
+				keyCreatedAt = time.Time{}
+			}
+		}
+
+		if time.Since(keyCreatedAt).Hours() > float64(purgeKeysAfterHours) {
+			log.Info().Msgf("Deleting key %v create at %v which is more than %v hours old...", key.Name, key.ValidAfterTime, purgeKeysAfterHours)
+			_, err := iamService.DeleteServiceAccountKey(key)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return
+}
+
+// DeleteServiceAccountKey deletes a key file for an existing account
+func (iamService *GoogleCloudIAMService) DeleteServiceAccountKey(serviceAccountKey *iam.ServiceAccountKey) (deleted bool, err error) {
+
+	_, err = iamService.service.Projects.ServiceAccounts.Keys.Delete(serviceAccountKey.Name).Context(context.Background()).Do()
+	if err != nil {
+		return
+	}
+
+	deleted = true
 
 	return
 }

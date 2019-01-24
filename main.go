@@ -44,6 +44,7 @@ var (
 	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
 	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").Required().String()
 	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
+	purgeKeysAfterHours     = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Required().Int()
 
 	version   string
 	branch    string
@@ -329,6 +330,8 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		}
 
 		// update the secret
+		currentState.Enabled = desiredState.Enabled
+		currentState.ServiceAccountName = desiredState.ServiceAccountName
 		currentState.FullServiceAccountName = fullServiceAccountName
 
 		log.Info().Msgf("[%v] Secret %v.%v - Updating secret because a new service account has been created...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
