@@ -81,6 +81,7 @@ func main() {
 	}
 
 	foundation.WatchForFileChanges(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), func(event fsnotify.Event) {
+		log.Info().Msg("Key file changed, reinitializing iam service...")
 		iamService, err = NewGoogleCloudIAMService(*serviceAccountProjectID, *serviceAccountPrefix)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Creating GoogleCloudIAMService failed")
