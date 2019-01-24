@@ -4,24 +4,18 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"flag"
 	"fmt"
-	stdlog "log"
 	"math/rand"
-	"net/http"
 	"os"
-	"os/signal"
-	"runtime"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/rs/zerolog"
+	foundation "github.com/estafette/estafette-foundation"
+	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/ericchiang/k8s"
 	corev1 "github.com/ericchiang/k8s/apis/core/v1"
@@ -46,19 +40,6 @@ var (
 	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
 	purgeKeysAfterHours     = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Required().Int()
 
-	version   string
-	branch    string
-	revision  string
-	buildDate string
-	goVersion = runtime.Version()
-)
-
-var (
-	addr = flag.String("listen-address", ":9101", "The address to listen on for HTTP requests.")
-
-	// seed random number
-	r = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	// define prometheus counter
 	certificateTotals = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -77,30 +58,9 @@ func init() {
 func main() {
 
 	// parse command line parameters
-	flag.Parse()
 	kingpin.Parse()
 
-	// log as severity for stackdriver logging to recognize the level
-	zerolog.LevelFieldName = "severity"
-
-	// set some default fields added to all logs
-	log.Logger = zerolog.New(os.Stdout).With().
-		Timestamp().
-		Str("app", "estafette-gcp-service-account").
-		Str("version", version).
-		Logger()
-
-	// use zerolog for any logs sent via standard log library
-	stdlog.SetFlags(0)
-	stdlog.SetOutput(log.Logger)
-
-	// log startup message
-	log.Info().
-		Str("branch", branch).
-		Str("revision", revision).
-		Str("buildDate", buildDate).
-		Str("goVersion", goVersion).
-		Msg("Starting estafette-gcp-service-account...")
+	foundation.InitLogging()
 
 	// create kubernetes api client
 	kubeClient, err := k8s.NewInClusterClient()
@@ -113,27 +73,17 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Creating GoogleCloudIAMService failed")
 	}
-	iamService.WatchForKeyfileChanges()
 
-	// start prometheus
-	go func() {
-		log.Debug().
-			Str("port", *addr).
-			Msg("Serving Prometheus metrics...")
-
-		http.Handle("/metrics", promhttp.Handler())
-
-		if err := http.ListenAndServe(*addr, nil); err != nil {
-			log.Fatal().Err(err).Msg("Starting Prometheus listener failed")
+	foundation.WatchForFileChanges(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"), func(event fsnotify.Event) {
+		iamService, err = NewGoogleCloudIAMService(*serviceAccountProjectID, *serviceAccountPrefix)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Creating GoogleCloudIAMService failed")
 		}
-	}()
+	})
 
-	// define channel used to gracefully shutdown the application
-	gracefulShutdown := make(chan os.Signal)
+	foundation.InitMetrics()
 
-	signal.Notify(gracefulShutdown, syscall.SIGTERM, syscall.SIGINT)
-
-	waitGroup := &sync.WaitGroup{}
+	gracefulShutdown, waitGroup := foundation.InitGracefulShutdownHandling()
 
 	// watch secrets for all namespaces
 	go func(waitGroup *sync.WaitGroup) {
@@ -185,7 +135,7 @@ func main() {
 			}
 
 			// sleep random time between 22 and 37 seconds
-			sleepTime := applyJitter(30)
+			sleepTime := foundation.ApplyJitter(30)
 			log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Second)
 		}
@@ -194,7 +144,7 @@ func main() {
 	go func(waitGroup *sync.WaitGroup) {
 
 		// sleep random time before polling in order to avoid race conditions (look at waitgroups in the future)
-		sleepTime := applyJitter(30)
+		sleepTime := foundation.ApplyJitter(30)
 		log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
 		time.Sleep(time.Duration(sleepTime) * time.Second)
 
@@ -234,26 +184,13 @@ func main() {
 			}
 
 			// sleep random time around 900 seconds
-			sleepTime := applyJitter(900)
+			sleepTime := foundation.ApplyJitter(900)
 			log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
 			time.Sleep(time.Duration(sleepTime) * time.Second)
 		}
 	}(waitGroup)
 
-	signalReceived := <-gracefulShutdown
-	log.Info().
-		Msgf("Received signal %v. Waiting for running tasks to finish...", signalReceived)
-
-	waitGroup.Wait()
-
-	log.Info().Msg("Shutting down...")
-}
-
-func applyJitter(input int) (output int) {
-
-	deviation := int(0.25 * float64(input))
-
-	return input - deviation + r.Intn(2*deviation)
+	foundation.HandleGracefulShutdown(gracefulShutdown, waitGroup)
 }
 
 func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState) {
