@@ -412,6 +412,39 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		return status, nil
 	}
 
+	// check if there's any old keys to purge once every 2 hours
+	if desiredState.Enabled == "true" && time.Since(lastAttempt).Hours() > 2 && currentState.FullServiceAccountName != "" {
+
+		log.Info().Msgf("[%v] Secret %v.%v - Checking %v for keys to purge...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
+
+		// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
+		currentState.LastAttempt = time.Now().Format(time.RFC3339)
+
+		// serialize state and store it in the annotation
+		gcpServiceAccountStateByteArray, err := json.Marshal(currentState)
+		if err != nil {
+			log.Error().Err(err)
+			return status, err
+		}
+		secret.Metadata.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
+
+		// update secret, with last attempt; this will fire an event for the watcher, but this shouldn't lead to any action because storing the last attempt locks the secret for 15 minutes
+		err = kubeClient.Update(context.Background(), secret)
+		if err != nil {
+			log.Error().Err(err)
+			return status, err
+		}
+
+		// purge old service account keys
+		err = iamService.PurgeServiceAccountKeys(currentState.FullServiceAccountName, *purgeKeysAfterHours)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed purging service account %v keys", currentState.FullServiceAccountName)
+			return status, err
+		}
+
+		status = "purged"
+	}
+
 	status = "skipped"
 
 	return status, nil
