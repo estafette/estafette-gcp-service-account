@@ -372,9 +372,9 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		}
 
 		// create service account
-		serviceAccountKey, err := iamService.CreateServiceAccountKey(desiredState.ServiceAccountName)
+		serviceAccountKey, err := iamService.CreateServiceAccountKey(currentState.FullServiceAccountName)
 		if err != nil {
-			log.Error().Err(err).Msgf("Failed creating service account %v key", desiredState.ServiceAccountName)
+			log.Error().Err(err).Msgf("Failed creating service account %v key", currentState.FullServiceAccountName)
 			return status, err
 		}
 
