@@ -61,7 +61,7 @@ func (iamService *GoogleCloudIAMService) WatchForKeyfileChanges() {
 	}
 	defer watcher.Close()
 
-	// done := make(chan bool)
+	done := make(chan bool)
 	go func() {
 		for {
 			select {
@@ -90,6 +90,8 @@ func (iamService *GoogleCloudIAMService) WatchForKeyfileChanges() {
 	keyFilePath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	keyFileDirectory := filepath.Dir(keyFilePath)
 
+	log.Info().Msgf("Setting up file watcher for directory %v...", keyFileDirectory)
+
 	err = watcher.Add(keyFileDirectory)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Watching service account key file directory failed")
@@ -97,7 +99,7 @@ func (iamService *GoogleCloudIAMService) WatchForKeyfileChanges() {
 
 	iamService.watcher = watcher
 
-	// <-done
+	<-done
 }
 
 // CreateServiceAccount creates a service account
