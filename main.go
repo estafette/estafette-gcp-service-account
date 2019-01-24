@@ -352,7 +352,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 	}
 
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
-	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.FullServiceAccountName != "" && time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
+	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && currentState.LastAttempt != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.FullServiceAccountName != "" && time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account %v key is up for rotation, requesting a new one now...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
 
@@ -454,7 +454,7 @@ func purgeSecretKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, 
 		}
 
 		// check if there's any old keys to purge once every 2 hours
-		if currentState.Enabled == "true" && time.Since(lastAttempt).Hours() > 2 && currentState.FullServiceAccountName != "" {
+		if currentState.Enabled == "true" && currentState.LastAttempt != "" && time.Since(lastAttempt).Hours() > 2 && currentState.FullServiceAccountName != "" {
 
 			log.Info().Msgf("[%v] Secret %v.%v - Checking %v for keys to purge...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, currentState.ServiceAccountName)
 
