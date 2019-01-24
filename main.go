@@ -213,6 +213,16 @@ func main() {
 					log.Error().Err(err)
 					continue
 				}
+
+				waitGroup.Add(1)
+				status, err = purgeSecretKeys(kubeClient, iamService, secret, "poller")
+				certificateTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "purger", "type": "secret"}).Inc()
+				waitGroup.Done()
+
+				if err != nil {
+					log.Error().Err(err)
+					continue
+				}
 			}
 
 			// sleep random time around 900 seconds
@@ -326,6 +336,11 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 
 		log.Info().Msgf("[%v] Secret %v.%v - Updating secret because a new service account has been created...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
+		err = generateServiceAccountKey(iamService, secret, initiator, &currentState)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed generating service account %v key", desiredState.FullServiceAccountName)
+		}
+
 		err = updateSecret(kubeClient, secret, currentState, initiator)
 		if err != nil {
 			return status, err
@@ -334,6 +349,8 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		status = "succeeded"
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account name has been stored in secret successfully...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
+
+		return status, err
 	}
 
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
@@ -349,29 +366,11 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 			return
 		}
 
-		// create service account
-		serviceAccountKey, err := iamService.CreateServiceAccountKey(currentState.FullServiceAccountName)
+		err = generateServiceAccountKey(iamService, secret, initiator, &currentState)
 		if err != nil {
-			log.Error().Err(err).Msgf("Failed creating service account %v key", currentState.FullServiceAccountName)
+			log.Error().Err(err).Msgf("Failed generating service account %v key", desiredState.FullServiceAccountName)
 			return status, err
 		}
-
-		// update the secret
-		currentState.LastRenewed = time.Now().Format(time.RFC3339)
-
-		// store the key file
-		if secret.Data == nil {
-			secret.Data = make(map[string][]byte)
-		}
-
-		decodedPrivateKeyData, err := base64.StdEncoding.DecodeString(serviceAccountKey.PrivateKeyData)
-		if err != nil {
-			log.Error().Err(err)
-			return status, err
-		}
-
-		// service account keyfile
-		secret.Data["service-account-key.json"] = decodedPrivateKeyData
 
 		err = updateSecret(kubeClient, secret, currentState, initiator)
 		if err != nil {
@@ -381,32 +380,42 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		status = "succeeded"
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account keyfile has been renewed successfully...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
-	}
 
-	// check if there's any old keys to purge once every 2 hours
-	if desiredState.Enabled == "true" && time.Since(lastAttempt).Hours() > 2 && currentState.FullServiceAccountName != "" {
-
-		log.Info().Msgf("[%v] Secret %v.%v - Checking %v for keys to purge...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
-
-		// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
-		currentState.LastAttempt = time.Now().Format(time.RFC3339)
-
-		err = updateSecret(kubeClient, secret, currentState, initiator)
-		if err != nil {
-			return
-		}
-
-		// purge old service account keys
-		err = iamService.PurgeServiceAccountKeys(currentState.FullServiceAccountName, *purgeKeysAfterHours)
-		if err != nil {
-			log.Error().Err(err).Msgf("Failed purging service account %v keys", currentState.FullServiceAccountName)
-			return status, err
-		}
+		return
 	}
 
 	status = "skipped"
 
 	return status, nil
+}
+
+func generateServiceAccountKey(iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string, currentState *GCPServiceAccountState) (err error) {
+
+	// create service account
+	serviceAccountKey, err := iamService.CreateServiceAccountKey(currentState.FullServiceAccountName)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed creating service account %v key", currentState.FullServiceAccountName)
+		return err
+	}
+
+	// update the secret
+	currentState.LastRenewed = time.Now().Format(time.RFC3339)
+
+	// store the key file
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
+	}
+
+	decodedPrivateKeyData, err := base64.StdEncoding.DecodeString(serviceAccountKey.PrivateKeyData)
+	if err != nil {
+		log.Error().Err(err)
+		return err
+	}
+
+	// service account keyfile
+	secret.Data["service-account-key.json"] = decodedPrivateKeyData
+
+	return
 }
 
 func processSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string) (status string, err error) {
@@ -426,6 +435,58 @@ func processSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, se
 	status = "skipped"
 
 	return status, nil
+}
+
+func purgeSecretKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string) (status string, err error) {
+
+	status = "failed"
+
+	if &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
+
+		// desiredState := getDesiredSecretState(secret)
+		currentState := getCurrentSecretState(secret)
+
+		if currentState.LastAttempt == "" {
+			return
+		}
+
+		lastAttempt, err := time.Parse(time.RFC3339, currentState.LastAttempt)
+		if err != nil {
+			return status, err
+		}
+
+		// check if there's any old keys to purge once every 2 hours
+		if currentState.Enabled == "true" && time.Since(lastAttempt).Hours() > 2 && currentState.FullServiceAccountName != "" {
+
+			log.Info().Msgf("[%v] Secret %v.%v - Checking %v for keys to purge...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, currentState.ServiceAccountName)
+
+			// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
+			currentState.LastAttempt = time.Now().Format(time.RFC3339)
+
+			err = updateSecret(kubeClient, secret, currentState, initiator)
+			if err != nil {
+				return status, err
+			}
+
+			// purge old service account keys
+			err = iamService.PurgeServiceAccountKeys(currentState.FullServiceAccountName, *purgeKeysAfterHours)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed purging service account %v keys", currentState.FullServiceAccountName)
+				return status, err
+			}
+
+			status = "purged"
+
+			return status, err
+		}
+
+		return status, err
+	}
+
+	status = "skipped"
+
+	return status, nil
+
 }
 
 func deleteSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string) (status string, err error) {
