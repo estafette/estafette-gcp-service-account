@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -49,7 +51,7 @@ func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccount(service
 
 	// shorted serviceAccountName for account id if needed
 	const randomStringLength = 4
-	prefixLength := len(*serviceAccountPrefix)
+	prefixLength := len(googleCloudIAMService.serviceAccountPrefix)
 	maxFirstSectionLength := 30 - randomStringLength - 1 - prefixLength - 1
 
 	shortenedServiceAccountName := serviceAccountName
@@ -77,6 +79,10 @@ func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccount(service
 // CreateServiceAccountKey creates a key file for an existing account
 func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccountKey(fullServiceAccountName string) (serviceAccountKey *iam.ServiceAccountKey, err error) {
 
+	if !googleCloudIAMService.ValidateFullServiceAccountName(fullServiceAccountName) {
+		return nil, fmt.Errorf("The full service account is not valid")
+	}
+
 	serviceAccountKey, err = googleCloudIAMService.service.Projects.ServiceAccounts.Keys.Create(fullServiceAccountName, &iam.CreateServiceAccountKeyRequest{}).Context(context.Background()).Do()
 	if err != nil {
 		return
@@ -87,6 +93,10 @@ func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccountKey(full
 
 // ListServiceAccountKeys lists all keys for an existing account
 func (googleCloudIAMService *GoogleCloudIAMService) ListServiceAccountKeys(fullServiceAccountName string) (serviceAccountKeys []*iam.ServiceAccountKey, err error) {
+
+	if !googleCloudIAMService.ValidateFullServiceAccountName(fullServiceAccountName) {
+		return nil, fmt.Errorf("The full service account is not valid")
+	}
 
 	keyListResponse, err := googleCloudIAMService.service.Projects.ServiceAccounts.Keys.List(fullServiceAccountName).Context(context.Background()).Do()
 	if err != nil {
@@ -100,6 +110,10 @@ func (googleCloudIAMService *GoogleCloudIAMService) ListServiceAccountKeys(fullS
 
 // PurgeServiceAccountKeys purges all keys older than x hours for an existing account
 func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAccountName string, purgeKeysAfterHours int) (err error) {
+
+	if !googleCloudIAMService.ValidateFullServiceAccountName(fullServiceAccountName) {
+		return fmt.Errorf("The full service account is not valid")
+	}
 
 	serviceAccountKeys, err := googleCloudIAMService.ListServiceAccountKeys(fullServiceAccountName)
 	if err != nil {
@@ -150,6 +164,10 @@ func (googleCloudIAMService *GoogleCloudIAMService) DeleteServiceAccountKey(serv
 // DeleteServiceAccount deletes a service account
 func (googleCloudIAMService *GoogleCloudIAMService) DeleteServiceAccount(fullServiceAccountName string) (deleted bool, err error) {
 
+	if !googleCloudIAMService.ValidateFullServiceAccountName(fullServiceAccountName) {
+		return false, fmt.Errorf("The full service account is not valid")
+	}
+
 	resp, err := googleCloudIAMService.service.Projects.ServiceAccounts.Delete(fullServiceAccountName).Context(context.Background()).Do()
 	if err != nil {
 		return
@@ -160,4 +178,34 @@ func (googleCloudIAMService *GoogleCloudIAMService) DeleteServiceAccount(fullSer
 	}
 
 	return
+}
+
+// ValidateFullServiceAccountName validates whether this controller is allowed to do anything with the service account
+func (googleCloudIAMService *GoogleCloudIAMService) ValidateFullServiceAccountName(fullServiceAccountName string) (valid bool) {
+
+	// only allow for service accounts with same prefix
+	r, _ := regexp.Compile(`^projects/([^/]+)/serviceAccounts/([^@]+)@([^.]+)\.(.+)$`)
+
+	matches := r.FindStringSubmatch(fullServiceAccountName)
+	if len(matches) != 5 {
+		log.Warn().Msgf("Full service account '%v' name doesn't have a valid structure", fullServiceAccountName)
+		return false
+	}
+
+	if matches[1] != googleCloudIAMService.projectID {
+		log.Warn().Msgf("Project '%v' in full service account '%v' doesn't match project '%v' as set for this controller", matches[1], fullServiceAccountName, googleCloudIAMService.projectID)
+		return false
+	}
+
+	if matches[3] != googleCloudIAMService.projectID {
+		log.Warn().Msgf("Project '%v' in service account email '%v@%v.%v' doesn't match project '%v' as set for this controller", matches[3], matches[2], matches[3], matches[4], googleCloudIAMService.projectID)
+		return false
+	}
+
+	if !strings.HasPrefix(fmt.Sprintf("%v-", matches[2]), googleCloudIAMService.serviceAccountPrefix) {
+		log.Warn().Msgf("Service account '%v' is not prefixed by '%v' as set for this controller", matches[2], googleCloudIAMService.serviceAccountPrefix)
+		return false
+	}
+
+	return true
 }
