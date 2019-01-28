@@ -47,7 +47,7 @@ var (
 	buildDate string
 
 	// define prometheus counter
-	certificateTotals = prometheus.NewCounterVec(
+	serviceAccountTotals = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "estafette_gcp_service_account_totals",
 			Help: "Number of generated service accounts in GCP.",
@@ -58,7 +58,7 @@ var (
 
 func init() {
 	// metrics have to be registered to be exposed
-	prometheus.MustRegister(certificateTotals)
+	prometheus.MustRegister(serviceAccountTotals)
 }
 
 func main() {
@@ -117,7 +117,7 @@ func main() {
 					if event == k8s.EventAdded || event == k8s.EventModified {
 						waitGroup.Add(1)
 						status, err := processSecret(kubeClient, iamService, secret, fmt.Sprintf("watcher:%v", event))
-						certificateTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
+						serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
 						waitGroup.Done()
 
 						if err != nil {
@@ -129,7 +129,7 @@ func main() {
 					if event == k8s.EventDeleted {
 						waitGroup.Add(1)
 						status, err := deleteSecret(kubeClient, iamService, secret, fmt.Sprintf("watcher:%v", event))
-						certificateTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
+						serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
 						waitGroup.Done()
 
 						if err != nil {
@@ -171,7 +171,7 @@ func main() {
 			for _, secret := range secrets.Items {
 				waitGroup.Add(1)
 				status, err := processSecret(kubeClient, iamService, secret, "poller")
-				certificateTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "poller", "type": "secret"}).Inc()
+				serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "poller", "type": "secret"}).Inc()
 				waitGroup.Done()
 
 				if err != nil {
@@ -181,7 +181,7 @@ func main() {
 
 				waitGroup.Add(1)
 				status, err = purgeSecretKeys(kubeClient, iamService, secret, "poller")
-				certificateTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "purger", "type": "secret"}).Inc()
+				serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "purger", "type": "secret"}).Inc()
 				waitGroup.Done()
 
 				if err != nil {
@@ -240,7 +240,7 @@ func getCurrentSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 
 func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string, desiredState, currentState GCPServiceAccountState) (status string, err error) {
 
-	status = "failed"
+	status = "skipped"
 
 	// parse last renewed time from state
 	lastRenewed := time.Time{}
