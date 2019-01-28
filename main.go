@@ -443,14 +443,14 @@ func makeSecretChangesPurgeKeys(kubeClient *k8s.Client, iamService *GoogleCloudI
 		}
 
 		// purge old service account keys
-		err = iamService.PurgeServiceAccountKeys(currentState.FullServiceAccountName, *purgeKeysAfterHours)
+		deleteCount, err := iamService.PurgeServiceAccountKeys(currentState.FullServiceAccountName, *purgeKeysAfterHours)
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed purging service account %v keys", currentState.FullServiceAccountName)
 			keyPurgeTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": "failed", "initiator": initiator, "type": "secret"}).Inc()
 			return err
 		}
 
-		keyPurgeTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": "succeeded", "initiator": initiator, "type": "secret"}).Inc()
+		keyPurgeTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": "succeeded", "initiator": initiator, "type": "secret"}).Add(float64(deleteCount))
 	}
 
 	return nil

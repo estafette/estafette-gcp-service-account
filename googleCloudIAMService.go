@@ -109,10 +109,10 @@ func (googleCloudIAMService *GoogleCloudIAMService) ListServiceAccountKeys(fullS
 }
 
 // PurgeServiceAccountKeys purges all keys older than x hours for an existing account
-func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAccountName string, purgeKeysAfterHours int) (err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(fullServiceAccountName string, purgeKeysAfterHours int) (deleteCount int, err error) {
 
 	if !googleCloudIAMService.ValidateFullServiceAccountName(fullServiceAccountName) {
-		return fmt.Errorf("The full service account is not valid")
+		return deleteCount, fmt.Errorf("The full service account is not valid")
 	}
 
 	serviceAccountKeys, err := googleCloudIAMService.ListServiceAccountKeys(fullServiceAccountName)
@@ -138,9 +138,12 @@ func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(full
 		// check if it's old enough to purge
 		if time.Since(keyCreatedAt).Hours() > float64(purgeKeysAfterHours) {
 			log.Info().Msgf("Deleting key %v created at %v (parsed to %v) because it is more than %v hours old...", key.Name, key.ValidAfterTime, keyCreatedAt, purgeKeysAfterHours)
-			_, err := googleCloudIAMService.DeleteServiceAccountKey(key)
+			deleted, err := googleCloudIAMService.DeleteServiceAccountKey(key)
 			if err != nil {
-				return err
+				log.Error().Err(err).Msgf("Failed deleting key %v", key.Name)
+				continue
+			} else if deleted {
+				deleteCount++
 			}
 		}
 	}
@@ -151,6 +154,7 @@ func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(full
 // DeleteServiceAccountKey deletes a key file for an existing account
 func (googleCloudIAMService *GoogleCloudIAMService) DeleteServiceAccountKey(serviceAccountKey *iam.ServiceAccountKey) (deleted bool, err error) {
 
+	log.Debug().Msgf("Deleting key %v...", serviceAccountKey.Name)
 	_, err = googleCloudIAMService.service.Projects.ServiceAccounts.Keys.Delete(serviceAccountKey.Name).Context(context.Background()).Do()
 	if err != nil {
 		return
