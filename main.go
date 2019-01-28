@@ -23,22 +23,31 @@ import (
 
 const annotationGCPServiceAccount string = "estafette.io/gcp-service-account"
 const annotationGCPServiceAccountName string = "estafette.io/gcp-service-account-name"
+const annotationGCPServiceAccountPermissions string = "estafette.io/gcp-service-account-permissions"
 const annotationGCPServiceAccountState string = "estafette.io/gcp-service-account-state"
 
 // GCPServiceAccountState represents the state of the secret with respect to GCP service accounts
 type GCPServiceAccountState struct {
-	Enabled                string `json:"enabled"`
-	ServiceAccountName     string `json:"serviceAccountName"`
-	FullServiceAccountName string `json:"fullServiceAccountName"`
-	LastRenewed            string `json:"lastRenewed"`
-	LastAttempt            string `json:"lastAttempt"`
+	Enabled                string                        `json:"enabled"`
+	ServiceAccountName     string                        `json:"serviceAccountName"`
+	FullServiceAccountName string                        `json:"fullServiceAccountName"`
+	Permissions            []GCPServiceAccountPermission `json:"permissions,omitempty"`
+	LastRenewed            string                        `json:"lastRenewed"`
+	LastAttempt            string                        `json:"lastAttempt"`
+}
+
+// GCPServiceAccountPermission represents a permission for a service account
+type GCPServiceAccountPermission struct {
+	Project string `json:"project"`
+	Role    string `json:"role"`
 }
 
 var (
-	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").String()
-	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").String()
-	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Int()
-	purgeKeysAfterHours     = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Int()
+	mode                    = kingpin.Flag("mode", "The mode this controller can run in.").Default("normal").OverrideDefaultFromEnvar("MODE").Required().Enum("normal", "convenient", "rotate_keys_only")
+	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
+	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").Required().String()
+	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
+	purgeKeysAfterHours     = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Required().Int()
 
 	app       string
 	version   string
@@ -54,11 +63,19 @@ var (
 		},
 		[]string{"namespace", "status", "initiator", "type"},
 	)
+	keyRotationsTotals = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "estafette_gcp_key_rotation_totals",
+			Help: "Number of rotated service account keys GCP.",
+		},
+		[]string{"namespace", "status", "initiator", "type"},
+	)
 )
 
 func init() {
 	// metrics have to be registered to be exposed
 	prometheus.MustRegister(serviceAccountTotals)
+	prometheus.MustRegister(keyRotationsTotals)
 }
 
 func main() {
@@ -116,8 +133,7 @@ func main() {
 
 					if event == k8s.EventAdded || event == k8s.EventModified {
 						waitGroup.Add(1)
-						status, err := processSecret(kubeClient, iamService, secret, fmt.Sprintf("watcher:%v", event))
-						serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
+						_, err := processSecret(kubeClient, iamService, secret, fmt.Sprintf("watcher:%v", event))
 						waitGroup.Done()
 
 						if err != nil {
@@ -128,8 +144,7 @@ func main() {
 
 					if event == k8s.EventDeleted {
 						waitGroup.Add(1)
-						status, err := deleteSecret(kubeClient, iamService, secret, fmt.Sprintf("watcher:%v", event))
-						serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
+						_, err := deleteSecret(kubeClient, iamService, secret, fmt.Sprintf("watcher:%v", event))
 						waitGroup.Done()
 
 						if err != nil {
@@ -215,6 +230,16 @@ func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 		state.ServiceAccountName = ""
 	}
 
+	serviceAccountPermissionsString, ok := secret.Metadata.Annotations[annotationGCPServiceAccountPermissions]
+	if !ok {
+		state.Permissions = []GCPServiceAccountPermission{}
+	} else {
+		err := json.Unmarshal([]byte(serviceAccountPermissionsString), &state.Permissions)
+		if err != nil {
+			state.Permissions = []GCPServiceAccountPermission{}
+		}
+	}
+
 	return
 }
 
@@ -264,7 +289,7 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 	newAccount := false
 
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
-	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.FullServiceAccountName == "" {
+	if (*mode == "normal" || *mode == "convenient") && desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.FullServiceAccountName == "" {
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account %v hasn't been created yet, creating one now...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
 
@@ -299,11 +324,24 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account name has been stored in secret successfully...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
+		serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
+
 		newAccount = true
 	}
 
+	// check if gcp-service-account is enabled for this secret, and permissions have been defined
+	if (*mode == "convenient") && desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && (time.Since(lastAttempt).Minutes() > 15 || newAccount) && currentState.FullServiceAccountName == "" && len(currentState.Permissions) != len(desiredState.Permissions) {
+		// in convenient mode this controller can set the permissions as well; but awarding this controller with the possibility to set permissions is not without risk
+
+		err = iamService.SetServiceAccountRoleBinding(currentState.FullServiceAccountName, desiredState.Permissions)
+		if err != nil {
+			log.Warn().Err(err).Msgf("Setting permissions for service account %v failed", desiredState.ServiceAccountName)
+		}
+
+	}
+
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
-	if desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && (time.Since(lastAttempt).Minutes() > 15 || newAccount) && currentState.FullServiceAccountName != "" && time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
+	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") && desiredState.Enabled == "true" && desiredState.ServiceAccountName != "" && (time.Since(lastAttempt).Minutes() > 15 || newAccount) && currentState.FullServiceAccountName != "" && time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account %v key is up for rotation, requesting a new one now...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.ServiceAccountName)
 
@@ -350,6 +388,8 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account keyfile has been renewed successfully...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
+		keyRotationsTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
+
 		return status, nil
 	}
 
@@ -386,7 +426,7 @@ func purgeSecretKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, 
 
 	status = "failed"
 
-	if &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
+	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") && &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
 
 		// desiredState := getDesiredSecretState(secret)
 		currentState := getCurrentSecretState(secret)
@@ -421,6 +461,7 @@ func purgeSecretKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, 
 			}
 
 			status = "purged"
+			keyRotationsTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
 
 			return status, err
 		}
@@ -440,7 +481,7 @@ func deleteSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, sec
 
 	log.Info().Msgf("[%v] Secret %v.%v - Deleting service account because secret has been deleted...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
-	if &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
+	if (*mode == "normal" || *mode == "convenient") && &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
 
 		currentState := getCurrentSecretState(secret)
 
@@ -454,6 +495,7 @@ func deleteSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, sec
 
 			if deleted {
 				status = "deleted"
+				serviceAccountTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": status, "initiator": "watcher", "type": "secret"}).Inc()
 				log.Info().Msgf("[%v] Secret %v.%v - Successfully deleted service account %v...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, currentState.FullServiceAccountName)
 			}
 		}

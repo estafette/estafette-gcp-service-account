@@ -209,3 +209,17 @@ func (googleCloudIAMService *GoogleCloudIAMService) ValidateFullServiceAccountNa
 
 	return true
 }
+
+// SetServiceAccountRoleBinding sets the desired permissions for this service account
+func (googleCloudIAMService *GoogleCloudIAMService) SetServiceAccountRoleBinding(fullServiceAccountName string, permissions []GCPServiceAccountPermission) (err error) {
+
+	// get current iam policies for service account
+	policy, err := googleCloudIAMService.service.Projects.ServiceAccounts.GetIamPolicy(fullServiceAccountName).Context(context.Background()).Do()
+	if err != nil {
+		return
+	}
+
+	log.Debug().Interface("policy", policy).Msgf("Retrieved service account %v iam policy", fullServiceAccountName)
+
+	return nil
+}

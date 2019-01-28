@@ -21,12 +21,12 @@
 			"revisionTime": "2019-01-17T01:24:43Z"
 		},
 		{
-			"checksumSHA1": "aY6UTtFrVvxgbqv2In9Y5230Gzs=",
+			"checksumSHA1": "mO3BFcsToZhAkvKS3hQOzmFSzMo=",
 			"path": "github.com/alecthomas/kingpin",
-			"revision": "1087e65c9441605df944fb12c33f0fe7072d18ca",
-			"revisionTime": "2017-07-27T04:22:29Z",
-			"version": "v2.2.5",
-			"versionExact": "v2.2.5"
+			"revision": "947dcec5ba9c011838740e680966fd7087a71d0d",
+			"revisionTime": "2017-12-17T18:08:21Z",
+			"version": "v2.2.6",
+			"versionExact": "v2.2.6"
 		},
 		{
 			"checksumSHA1": "KmjnydoAbofMieIWm+it5OWERaM=",
