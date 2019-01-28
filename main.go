@@ -43,7 +43,7 @@ type GCPServiceAccountPermission struct {
 }
 
 var (
-	mode                    = kingpin.Flag("mode", "The mode this controller can run in.").Default("normal").OverrideDefaultFromEnvar("MODE").Required().Enum("normal", "convenient", "rotate_keys_only")
+	mode                    = kingpin.Flag("mode", "The mode this controller can run in.").Default("normal").Envar("MODE").Enum("normal", "convenient", "rotate_keys_only")
 	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
 	serviceAccountPrefix    = kingpin.Flag("service-account-prefix", "The prefix for service account names.").Envar("SERVICE_ACCOUNT_PREFIX").Required().String()
 	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
