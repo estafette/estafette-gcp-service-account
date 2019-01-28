@@ -191,7 +191,6 @@ func main() {
 
 				if err != nil {
 					log.Error().Err(err)
-					continue
 				}
 
 				waitGroup.Add(1)
@@ -201,7 +200,6 @@ func main() {
 
 				if err != nil {
 					log.Error().Err(err)
-					continue
 				}
 			}
 
