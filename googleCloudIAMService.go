@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -120,30 +121,36 @@ func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(full
 		return
 	}
 
-	for _, key := range serviceAccountKeys {
+	sort.Slice(serviceAccountKeys, func(i, j int) bool {
+		return serviceAccountKeys[i].ValidAfterTime > serviceAccountKeys[j].ValidAfterTime
+	})
 
-		// parse validAfterTime to get key creation date
-		keyCreatedAt := time.Time{}
-		if key.ValidAfterTime == "" {
-			log.Warn().Msgf("Key %v has empty ValidAfterTime, skipping...", key.Name)
-			continue
-		}
+	if len(serviceAccountKeys) > 1 {
+		for _, key := range serviceAccountKeys[1:] {
 
-		keyCreatedAt, err = time.Parse(time.RFC3339, key.ValidAfterTime)
-		if err != nil {
-			log.Warn().Msgf("Can't parse ValidAfterTime %v for key %v, skipping...", key.ValidAfterTime, key.Name)
-			continue
-		}
-
-		// check if it's old enough to purge
-		if time.Since(keyCreatedAt).Hours() > float64(purgeKeysAfterHours) {
-			log.Info().Msgf("Deleting key %v created at %v (parsed to %v) because it is more than %v hours old...", key.Name, key.ValidAfterTime, keyCreatedAt, purgeKeysAfterHours)
-			deleted, err := googleCloudIAMService.DeleteServiceAccountKey(key)
-			if err != nil {
-				log.Error().Err(err).Msgf("Failed deleting key %v", key.Name)
+			// parse validAfterTime to get key creation date
+			keyCreatedAt := time.Time{}
+			if key.ValidAfterTime == "" {
+				log.Warn().Msgf("Key %v has empty ValidAfterTime, skipping...", key.Name)
 				continue
-			} else if deleted {
-				deleteCount++
+			}
+
+			keyCreatedAt, err = time.Parse(time.RFC3339, key.ValidAfterTime)
+			if err != nil {
+				log.Warn().Msgf("Can't parse ValidAfterTime %v for key %v, skipping...", key.ValidAfterTime, key.Name)
+				continue
+			}
+
+			// check if it's old enough to purge
+			if time.Since(keyCreatedAt).Hours() > float64(purgeKeysAfterHours) {
+				log.Info().Msgf("Deleting key %v created at %v (parsed to %v) because it is more than %v hours old...", key.Name, key.ValidAfterTime, keyCreatedAt, purgeKeysAfterHours)
+				deleted, err := googleCloudIAMService.DeleteServiceAccountKey(key)
+				if err != nil {
+					log.Error().Err(err).Msgf("Failed deleting key %v", key.Name)
+					continue
+				} else if deleted {
+					deleteCount++
+				}
 			}
 		}
 	}
@@ -155,12 +162,14 @@ func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(full
 func (googleCloudIAMService *GoogleCloudIAMService) DeleteServiceAccountKey(serviceAccountKey *iam.ServiceAccountKey) (deleted bool, err error) {
 
 	log.Debug().Msgf("Deleting key %v...", serviceAccountKey.Name)
-	_, err = googleCloudIAMService.service.Projects.ServiceAccounts.Keys.Delete(serviceAccountKey.Name).Context(context.Background()).Do()
+	resp, err := googleCloudIAMService.service.Projects.ServiceAccounts.Keys.Delete(serviceAccountKey.Name).Context(context.Background()).Do()
 	if err != nil {
 		return
 	}
 
-	deleted = true
+	if resp.HTTPStatusCode == 200 {
+		deleted = true
+	}
 
 	return
 }
