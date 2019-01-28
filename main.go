@@ -407,7 +407,7 @@ func processSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, se
 
 	status = "failed"
 
-	if &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
+	if secret != nil && secret.Metadata != nil && secret.Metadata.Annotations != nil {
 
 		desiredState := getDesiredSecretState(secret)
 		currentState := getCurrentSecretState(secret)
@@ -426,7 +426,7 @@ func purgeSecretKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, 
 
 	status = "failed"
 
-	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") && &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
+	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") && secret != nil && secret.Metadata != nil && secret.Metadata.Annotations != nil {
 
 		// desiredState := getDesiredSecretState(secret)
 		currentState := getCurrentSecretState(secret)
@@ -481,7 +481,7 @@ func deleteSecret(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, sec
 
 	log.Info().Msgf("[%v] Secret %v.%v - Deleting service account because secret has been deleted...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace)
 
-	if (*mode == "normal" || *mode == "convenient") && &secret != nil && &secret.Metadata != nil && &secret.Metadata.Annotations != nil {
+	if (*mode == "normal" || *mode == "convenient") && secret != nil && secret.Metadata != nil && secret.Metadata.Annotations != nil {
 
 		currentState := getCurrentSecretState(secret)
 
