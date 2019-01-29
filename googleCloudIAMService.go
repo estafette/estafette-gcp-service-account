@@ -50,6 +50,76 @@ func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccount(service
 		return "", fmt.Errorf("Service account name %v is too short; set at least name of 3 characters or more in the estafette.io/gcp-service-account-name annotation", serviceAccountName)
 	}
 
+	// generate random account id and structured display name to serve as 'metadata'
+	accountID, displayName := googleCloudIAMService.GetServiceAccountIDAndDisplayName(serviceAccountName)
+
+	// ensure account doesn't already exist
+	for {
+		serviceAccount, _ := googleCloudIAMService.service.Projects.ServiceAccounts.Get("projects/" + googleCloudIAMService.projectID + "/serviceAccounts/" + accountID).Context(context.Background()).Do()
+
+		// if the service account doesn't exist, it's free to create a new one with this account id
+		if serviceAccount == nil {
+			break
+		}
+
+		// generate new random account id to see if it's free
+		accountID, displayName = googleCloudIAMService.GetServiceAccountIDAndDisplayName(serviceAccountName)
+	}
+
+	// create the service account
+	serviceAccount, err := googleCloudIAMService.service.Projects.ServiceAccounts.Create("projects/"+googleCloudIAMService.projectID, &iam.CreateServiceAccountRequest{
+		AccountId: accountID,
+		ServiceAccount: &iam.ServiceAccount{
+			DisplayName: displayName,
+		},
+	}).Context(context.Background()).Do()
+	if err != nil {
+		return
+	}
+
+	fullServiceAccountName = serviceAccount.Name
+
+	return
+}
+
+func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayName(serviceAccountName string) (fullServiceAccountName string, err error) {
+
+	if len(serviceAccountName) < 3 {
+		return "", fmt.Errorf("Service account name %v is too short; set at least name of 3 characters or more in the estafette.io/gcp-service-account-name annotation", serviceAccountName)
+	}
+
+	// generate structured display name to be able to retrieve the service account with random account id
+	_, displayName := googleCloudIAMService.GetServiceAccountIDAndDisplayName(serviceAccountName)
+
+	resp, err := googleCloudIAMService.service.Projects.ServiceAccounts.List("projects/" + googleCloudIAMService.projectID).Context(context.Background()).Do()
+	if err != nil {
+		return
+	}
+
+	matchingServiceAccounts := []*iam.ServiceAccount{}
+
+	for _, sa := range resp.Accounts {
+		if sa.DisplayName == displayName {
+			matchingServiceAccounts = append(matchingServiceAccounts, sa)
+		}
+	}
+
+	if len(matchingServiceAccounts) > 0 {
+		// reverse sort to have highest uniqueid first
+		sort.Slice(matchingServiceAccounts, func(i, j int) bool {
+			return matchingServiceAccounts[i].UniqueId > matchingServiceAccounts[j].UniqueId
+		})
+
+		// pick service account with highest unique id
+		fullServiceAccountName = matchingServiceAccounts[0].Name
+	}
+
+	return "", fmt.Errorf("There is no service account with display name %v in project %v", displayName, googleCloudIAMService.projectID)
+}
+
+// GetServiceAccountIDAndDisplayName generates account id and display name if mode is set to normal or convenient
+func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountIDAndDisplayName(serviceAccountName string) (accountID, displayName string) {
+
 	// shorted serviceAccountName for account id if needed
 	const randomStringLength = 4
 	prefixLength := len(googleCloudIAMService.serviceAccountPrefix)
@@ -62,17 +132,8 @@ func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccount(service
 
 	randomString := randStringBytesMaskImprSrc(randomStringLength)
 
-	serviceAccount, err := googleCloudIAMService.service.Projects.ServiceAccounts.Create("projects/"+googleCloudIAMService.projectID, &iam.CreateServiceAccountRequest{
-		AccountId: fmt.Sprintf("%v-%v-%v", googleCloudIAMService.serviceAccountPrefix, shortenedServiceAccountName, randomString),
-		ServiceAccount: &iam.ServiceAccount{
-			DisplayName: fmt.Sprintf("%v-%v-%v", googleCloudIAMService.serviceAccountPrefix, serviceAccountName, randomString),
-		},
-	}).Context(context.Background()).Do()
-	if err != nil {
-		return
-	}
-
-	fullServiceAccountName = serviceAccount.Name
+	accountID = fmt.Sprintf("%v-%v-%v", googleCloudIAMService.serviceAccountPrefix, shortenedServiceAccountName, randomString)
+	displayName = fmt.Sprintf("%v-%v", googleCloudIAMService.serviceAccountPrefix, serviceAccountName)
 
 	return
 }
@@ -121,11 +182,13 @@ func (googleCloudIAMService *GoogleCloudIAMService) PurgeServiceAccountKeys(full
 		return
 	}
 
-	sort.Slice(serviceAccountKeys, func(i, j int) bool {
-		return serviceAccountKeys[i].ValidAfterTime > serviceAccountKeys[j].ValidAfterTime
-	})
-
 	if len(serviceAccountKeys) > 1 {
+		// reverse sort with newest first
+		sort.Slice(serviceAccountKeys, func(i, j int) bool {
+			return serviceAccountKeys[i].ValidAfterTime > serviceAccountKeys[j].ValidAfterTime
+		})
+
+		// check all but the newest to see if it's old enough to be purged
 		for _, key := range serviceAccountKeys[1:] {
 
 			// parse validAfterTime to get key creation date
