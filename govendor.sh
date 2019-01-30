@@ -6,3 +6,4 @@ govendor fetch github.com/alecthomas/kingpin@v2.2.6
 govendor fetch golang.org/x/oauth2/google
 govendor fetch google.golang.org/api/iam/v1
 govendor fetch github.com/estafette/estafette-foundation@0.0.3
+govendor fetch github.com/sethgrid/pester@1.0.0

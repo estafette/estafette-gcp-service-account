@@ -253,6 +253,14 @@
 			"revisionTime": "2019-01-03T19:04:23Z"
 		},
 		{
+			"checksumSHA1": "+eKCPrilWpxu/WPy1zKPaPfV014=",
+			"path": "github.com/sethgrid/pester",
+			"revision": "03e26c9abbbf5accb8349790bf9f41bde09d72c3",
+			"revisionTime": "2018-04-30T14:00:37Z",
+			"version": "1.0.0",
+			"versionExact": "1.0.0"
+		},
+		{
 			"checksumSHA1": "cIbx/lKONK5Bz/DROB9K51qbkAk=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "ffdc059bfe9ce6a4e144ba849dbedead332c6053",

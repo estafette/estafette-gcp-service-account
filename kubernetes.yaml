@@ -59,8 +59,6 @@ spec:
           value: /secrets/service-account-key.json
         - name: MODE
           value: "${MODE}"
-        - name: SERVICE_ACCOUNT_PREFIX
-          value: "${SERVICE_ACCOUNT_PREFIX}"
         - name: SERVICE_ACCOUNT_PROJECT_ID
           value: "${SERVICE_ACCOUNT_PROJECT_ID}"
         - name: KEY_ROTATION_AFTER_HOURS
