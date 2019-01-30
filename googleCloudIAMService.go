@@ -99,20 +99,33 @@ func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayNa
 		return
 	}
 
-	resp, err := googleCloudIAMService.service.Projects.ServiceAccounts.List("projects/" + googleCloudIAMService.serviceAccountProjectID).Context(context.Background()).Do()
-	if err != nil {
-		return
-	}
-
-	log.Debug().Interface("service account list response", resp).Msg("Inspecting list response for pagination")
-
-	log.Info().Msgf("Checking %v service account for matching display name...", len(resp.Accounts))
 	matchingServiceAccounts := []*iam.ServiceAccount{}
-	for _, sa := range resp.Accounts {
-		log.Debug().Interface("sa", sa).Msg("Listing service accounts...")
-		if sa.DisplayName == displayName {
-			matchingServiceAccounts = append(matchingServiceAccounts, sa)
+	nextPageToken := ""
+
+	for {
+		// retrieving service accounts (by page)
+		log.Info().Msgf("Retrieving service accounts with page token '%v'...", nextPageToken)
+		listCall := googleCloudIAMService.service.Projects.ServiceAccounts.List("projects/" + googleCloudIAMService.serviceAccountProjectID)
+		if nextPageToken != "" {
+			listCall.PageToken(nextPageToken)
 		}
+		resp, err := listCall.Context(context.Background()).Do()
+		if err != nil {
+			return
+		}
+
+		// filter on display names
+		log.Info().Msgf("Checking %v service accounts for matching display name...", len(resp.Accounts))
+		for _, sa := range resp.Accounts {
+			if sa.DisplayName == displayName {
+				matchingServiceAccounts = append(matchingServiceAccounts, sa)
+			}
+		}
+
+		if resp.NextPageToken == "" {
+			break
+		}
+		nextPageToken = resp.NextPageToken
 	}
 
 	log.Info().Msgf("Found %v service accounts with matching display name...", len(matchingServiceAccounts))
