@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -126,6 +127,9 @@ func main() {
 		log.Fatal().Err(err)
 	}
 	localProjectID := string(body)
+	if resp.StatusCode != http.StatusOK {
+		log.Fatal().Str("body", string(body)).Msgf("Failed retrieving project id from metadata with status code %v", resp.StatusCode)
+	}
 
 	// create service to Google Cloud IAM
 	iamService, err := NewGoogleCloudIAMService(*serviceAccountProjectID, localProjectID)
