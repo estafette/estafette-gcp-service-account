@@ -107,6 +107,7 @@ func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayNa
 	matchingServiceAccounts := []*iam.ServiceAccount{}
 
 	for _, sa := range resp.Accounts {
+		log.Debug().Interface("sa", sa).Msg("Listing service accounts...")
 		if sa.DisplayName == displayName {
 			matchingServiceAccounts = append(matchingServiceAccounts, sa)
 		}
