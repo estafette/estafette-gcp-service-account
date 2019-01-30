@@ -117,10 +117,14 @@ func main() {
 	}
 
 	// get project id from metadata server (might be impossible with metadata disabled, see https://cloud.google.com/kubernetes-engine/docs/how-to/protecting-cluster-metadata)
-	resp, err := pester.Get("http://metadata.google.internal/computeMetadata/v1/project/project-id")
+	client := pester.New()
+	request, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/project/project-id", nil)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
+	request.Header.Add("Metadata-Flavor", "Google")
+	resp, err := client.Do(request)
+
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
