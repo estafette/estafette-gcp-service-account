@@ -104,8 +104,10 @@ func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayNa
 		return
 	}
 
-	matchingServiceAccounts := []*iam.ServiceAccount{}
+	log.Debug().Interface("service account list response", resp).Msg("Inspecting list response for pagination")
 
+	log.Info().Msgf("Checking %v service account for matching display name...", len(resp.Accounts))
+	matchingServiceAccounts := []*iam.ServiceAccount{}
 	for _, sa := range resp.Accounts {
 		log.Debug().Interface("sa", sa).Msg("Listing service accounts...")
 		if sa.DisplayName == displayName {
@@ -113,6 +115,7 @@ func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayNa
 		}
 	}
 
+	log.Info().Msgf("Found %v service accounts with matching display name...", len(matchingServiceAccounts))
 	if len(matchingServiceAccounts) > 0 {
 		// reverse sort to have highest uniqueid first
 		sort.Slice(matchingServiceAccounts, func(i, j int) bool {
@@ -121,6 +124,8 @@ func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayNa
 
 		// pick service account with highest unique id
 		fullServiceAccountName = matchingServiceAccounts[0].Name
+
+		return
 	}
 
 	return "", fmt.Errorf("There is no service account with display name %v in project %v", displayName, googleCloudIAMService.serviceAccountProjectID)
