@@ -1,0 +1,93 @@
+# cloud.google.com/go v0.34.0
+cloud.google.com/go/compute/metadata
+# github.com/alecthomas/kingpin v2.2.6+incompatible
+github.com/alecthomas/kingpin
+# github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc
+github.com/alecthomas/template
+github.com/alecthomas/template/parse
+# github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf
+github.com/alecthomas/units
+# github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973
+github.com/beorn7/perks/quantile
+# github.com/davecgh/go-spew v1.1.1
+github.com/davecgh/go-spew/spew
+# github.com/ericchiang/k8s v1.2.0
+github.com/ericchiang/k8s
+github.com/ericchiang/k8s/apis/core/v1
+github.com/ericchiang/k8s/apis/meta/v1
+github.com/ericchiang/k8s/runtime
+github.com/ericchiang/k8s/watch/versioned
+github.com/ericchiang/k8s/apis/apiextensions/v1beta1
+github.com/ericchiang/k8s/apis/resource
+github.com/ericchiang/k8s/runtime/schema
+github.com/ericchiang/k8s/util/intstr
+# github.com/estafette/estafette-foundation v0.0.0-20190124210148-59f5c9179d4a
+github.com/estafette/estafette-foundation
+# github.com/fsnotify/fsnotify v1.4.7
+github.com/fsnotify/fsnotify
+# github.com/golang/protobuf v1.2.0
+github.com/golang/protobuf/proto
+# github.com/matttproud/golang_protobuf_extensions v1.0.1
+github.com/matttproud/golang_protobuf_extensions/pbutil
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
+# github.com/prometheus/client_golang v0.9.1
+github.com/prometheus/client_golang/prometheus
+github.com/prometheus/client_golang/prometheus/promhttp
+github.com/prometheus/client_golang/prometheus/internal
+# github.com/prometheus/client_model v0.0.0-20190115171406-56726106282f
+github.com/prometheus/client_model/go
+# github.com/prometheus/common v0.1.0
+github.com/prometheus/common/expfmt
+github.com/prometheus/common/model
+github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
+# github.com/prometheus/procfs v0.0.0-20190117184657-bf6a532e95b1
+github.com/prometheus/procfs
+github.com/prometheus/procfs/nfs
+github.com/prometheus/procfs/xfs
+github.com/prometheus/procfs/internal/util
+# github.com/rs/zerolog v0.0.0-20190103190423-aa55558e4cb2
+github.com/rs/zerolog/log
+github.com/rs/zerolog
+github.com/rs/zerolog/internal/cbor
+github.com/rs/zerolog/internal/json
+# github.com/sethgrid/pester v0.0.0-20180430140037-03e26c9abbbf
+github.com/sethgrid/pester
+# github.com/stretchr/testify v1.3.0
+github.com/stretchr/testify/assert
+# golang.org/x/net v0.0.0-20190119204137-ed066c81e75e
+golang.org/x/net/http2
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+golang.org/x/net/context/ctxhttp
+golang.org/x/net/context
+# golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c
+golang.org/x/oauth2/google
+golang.org/x/oauth2
+golang.org/x/oauth2/internal
+golang.org/x/oauth2/jws
+golang.org/x/oauth2/jwt
+# golang.org/x/sys v0.0.0-20190124100055-b90733256f2e
+golang.org/x/sys/unix
+# golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2
+golang.org/x/text/secure/bidirule
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+golang.org/x/text/transform
+# google.golang.org/api v0.1.0
+google.golang.org/api/iam/v1
+google.golang.org/api/gensupport
+google.golang.org/api/googleapi
+google.golang.org/api/googleapi/internal/uritemplates
+# google.golang.org/appengine v1.4.0
+google.golang.org/appengine
+google.golang.org/appengine/urlfetch
+google.golang.org/appengine/internal
+google.golang.org/appengine/internal/app_identity
+google.golang.org/appengine/internal/modules
+google.golang.org/appengine/internal/urlfetch
+google.golang.org/appengine/internal/base
+google.golang.org/appengine/internal/datastore
+google.golang.org/appengine/internal/log
+google.golang.org/appengine/internal/remote_api
