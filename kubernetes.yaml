@@ -65,6 +65,8 @@ spec:
           value: "${KEY_ROTATION_AFTER_HOURS}"
         - name: PURGE_KEYS_AFTER_HOURS
           value: "${PURGE_KEYS_AFTER_HOURS}"
+        - name: ALLOW_DISABLE_KEY_ROTATION_OVERRIDE
+          value: "${ALLOW_DISABLE_KEY_ROTATION_OVERRIDE}"
         resources:
           requests:
             cpu: 50m

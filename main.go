@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 
 const annotationGCPServiceAccount string = "estafette.io/gcp-service-account"
 const annotationGCPServiceAccountName string = "estafette.io/gcp-service-account-name"
+const annotationGCPServiceAccountDisableKeyRotation string = "estafette.io/gcp-service-account-disable-key-rotation"
 const annotationGCPServiceAccountPermissions string = "estafette.io/gcp-service-account-permissions"
 const annotationGCPServiceAccountState string = "estafette.io/gcp-service-account-state"
 
@@ -32,6 +34,7 @@ const annotationGCPServiceAccountState string = "estafette.io/gcp-service-accoun
 type GCPServiceAccountState struct {
 	Enabled                string                        `json:"enabled"`
 	Name                   string                        `json:"name"`
+	DisableKeyRotation     bool                          `json:"disableKeyRotation"`
 	FullServiceAccountName string                        `json:"fullServiceAccountName"`
 	Permissions            []GCPServiceAccountPermission `json:"permissions,omitempty"`
 	LastRenewed            string                        `json:"lastRenewed"`
@@ -45,10 +48,11 @@ type GCPServiceAccountPermission struct {
 }
 
 var (
-	mode                    = kingpin.Flag("mode", "The mode this controller can run in.").Default("normal").Envar("MODE").Enum("normal", "convenient", "rotate_keys_only")
-	serviceAccountProjectID = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
-	keyRotationAfterHours   = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
-	purgeKeysAfterHours     = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Required().Int()
+	mode                            = kingpin.Flag("mode", "The mode this controller can run in.").Default("normal").Envar("MODE").Enum("normal", "convenient", "rotate_keys_only")
+	serviceAccountProjectID         = kingpin.Flag("service-account-project-id", "The Google Cloud project id in which to create service accounts.").Envar("SERVICE_ACCOUNT_PROJECT_ID").Required().String()
+	keyRotationAfterHours           = kingpin.Flag("key-rotation-after-hours", "How many hours before a key is rotated.").Envar("KEY_ROTATION_AFTER_HOURS").Required().Int()
+	purgeKeysAfterHours             = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Required().Int()
+	allowDisableKeyRotationOverride = kingpin.Flag("allow-disable-key-rotation-override", "If set on a per secret basis key rotation can be disabled with an annotation.").Default("false").OverrideDefaultFromEnvar("ALLOW_DISABLE_KEY_ROTATION_OVERRIDE").Bool()
 
 	app       string
 	version   string
@@ -259,6 +263,17 @@ func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 		state.Name = ""
 	}
 
+	disableKeyRotationValue, ok := secret.Metadata.Annotations[annotationGCPServiceAccountDisableKeyRotation]
+	if !ok {
+		state.DisableKeyRotation = false
+	} else{
+		var err error
+		state.DisableKeyRotation, err = strconv.ParseBool(disableKeyRotationValue)
+		if err != nil {
+			state.DisableKeyRotation = false
+		}
+	}
+
 	serviceAccountPermissionsString, ok := secret.Metadata.Annotations[annotationGCPServiceAccountPermissions]
 	if !ok {
 		state.Permissions = []GCPServiceAccountPermission{}
@@ -446,7 +461,13 @@ func makeSecretChangesSetPermissions(kubeClient *k8s.Client, iamService *GoogleC
 func makeSecretChangesRotateKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string, desiredState GCPServiceAccountState, currentState *GCPServiceAccountState, lastAttempt, lastRenewed time.Time, newAccount bool) (err error) {
 
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
-	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") && desiredState.Enabled == "true" && desiredState.Name != "" && (time.Since(lastAttempt).Minutes() > 15 || newAccount) && currentState.FullServiceAccountName != "" && time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
+	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") &&
+		desiredState.Enabled == "true" &&
+		desiredState.Name != "" &&
+		(time.Since(lastAttempt).Minutes() > 15 || newAccount) &&
+		(len(secret.Data) == 0 || !*allowDisableKeyRotationOverride || !desiredState.DisableKeyRotation) &&
+		currentState.FullServiceAccountName != "" &&
+		time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
 
 		log.Info().Msgf("[%v] Secret %v.%v - Service account %v key is up for rotation, requesting a new one now...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.Name)
 
