@@ -528,7 +528,13 @@ func makeSecretChangesRotateKeys(kubeClient *k8s.Client, iamService *GoogleCloud
 
 func makeSecretChangesPurgeKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string, desiredState GCPServiceAccountState, currentState *GCPServiceAccountState, lastAttempt, lastRenewed time.Time) (err error) {
 
-	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") && time.Since(lastAttempt).Minutes() > 15 && currentState.Enabled == "true" && currentState.LastRenewed != "" && time.Since(lastRenewed).Hours() > 2 && currentState.FullServiceAccountName != "" {
+	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") &&
+		time.Since(lastAttempt).Minutes() > 15 &&
+		currentState.Enabled == "true" &&
+		currentState.LastRenewed != "" &&
+		time.Since(lastRenewed).Hours() > 2 &&
+		currentState.FullServiceAccountName != "" &&
+		(!*allowDisableKeyRotationOverride || !desiredState.DisableKeyRotation) {
 
 		log.Info().Msgf("[%v] Secret %v.%v - Checking %v for keys to purge...", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, currentState.Name)
 
