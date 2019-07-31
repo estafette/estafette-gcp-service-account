@@ -73,7 +73,7 @@ spec:
             memory: 100Mi
           limits:
             cpu: 100m
-            memory: 250Mi
+            memory: 350Mi
         livenessProbe:
           httpGet:
             path: /metrics
