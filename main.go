@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -587,14 +588,18 @@ func annotateServiceAccountWithWorkloadIdentity(kubeClient *k8s.Client, secret *
 			return err
 		}
 
+		// get email address from full service account name
+		fullServiceAccountNameParts := strings.Split(currentState.FullServiceAccountName, "/")
+		serviceAccountEmail := fullServiceAccountNameParts[len(fullServiceAccountNameParts)-1]
+
 		// check if annotation exists
-		if annotationValue, ok := serviceAccount.Metadata.Annotations["iam.gke.io/gcp-service-account"]; ok && annotationValue == currentState.FullServiceAccountName {
+		if annotationValue, ok := serviceAccount.Metadata.Annotations["iam.gke.io/gcp-service-account"]; ok && annotationValue == serviceAccountEmail {
 			// it's already there, don't need to do anything
 			return nil
 		}
 
 		// update service account
-		serviceAccount.Metadata.Annotations["iam.gke.io/gcp-service-account"] = currentState.FullServiceAccountName
+		serviceAccount.Metadata.Annotations["iam.gke.io/gcp-service-account"] = serviceAccountEmail
 
 		err = kubeClient.Update(context.Background(), &serviceAccount)
 		if err != nil {
