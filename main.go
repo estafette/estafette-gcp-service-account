@@ -266,7 +266,7 @@ func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 	disableKeyRotationValue, ok := secret.Metadata.Annotations[annotationGCPServiceAccountDisableKeyRotation]
 	if !ok {
 		state.DisableKeyRotation = false
-	} else{
+	} else {
 		var err error
 		state.DisableKeyRotation, err = strconv.ParseBool(disableKeyRotationValue)
 		if err != nil {
@@ -348,6 +348,11 @@ func makeSecretChanges(kubeClient *k8s.Client, iamService *GoogleCloudIAMService
 		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed purging keys for service account %v", initiator, *secret.Metadata.Name, *secret.Metadata.Namespace, desiredState.Name)
 	}
 
+	err = annotateServiceAccountWithWorkloadIdentity(kubeClient, secret, initiator, &currentState, lastAttempt)
+	if err != nil {
+		log.Warn().Err(err).Msgf("[%v] Secret %v.%v - Failed annotating service account with workload identity", initiator, currentState.Name, *secret.Metadata.Namespace)
+	}
+
 	return nil
 }
 
@@ -367,7 +372,7 @@ func makeSecretChangesGetOrCreateServiceAccount(kubeClient *k8s.Client, iamServi
 			return
 		}
 
-		// fecth service account by display name
+		// fetch service account by display name
 		fullServiceAccountName, err := iamService.GetServiceAccountByDisplayName(desiredState.Name)
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed retrieving service account %v by display name", desiredState.Name)
@@ -561,6 +566,44 @@ func makeSecretChangesPurgeKeys(kubeClient *k8s.Client, iamService *GoogleCloudI
 	}
 
 	keyPurgeTotals.With(prometheus.Labels{"namespace": *secret.Metadata.Namespace, "status": "skipped", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
+
+	return nil
+}
+
+// annotateServiceAccountWithWorkloadIdentity sets workload identity annotation on service account, see https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+func annotateServiceAccountWithWorkloadIdentity(kubeClient *k8s.Client, secret *corev1.Secret, initiator string, currentState *GCPServiceAccountState, lastAttempt time.Time) (err error) {
+
+	if time.Since(lastAttempt).Minutes() > 15 &&
+		currentState.Enabled == "true" &&
+		currentState.FullServiceAccountName != "" {
+
+		log.Info().Msgf("[%v] Service account %v.%v - Checking for workload identity annotation...", initiator, currentState.Name, *secret.Metadata.Namespace)
+
+		// fetch service account
+		var serviceAccount corev1.ServiceAccount
+		err := kubeClient.Get(context.Background(), *secret.Metadata.Namespace, currentState.Name, &serviceAccount)
+		if err != nil {
+			log.Warn().Err(err).Msgf("Can't retrieve service account %v.%v", currentState.Name, *secret.Metadata.Namespace)
+			return err
+		}
+
+		// check if annotation exists
+		if annotationValue, ok := serviceAccount.Metadata.Annotations["iam.gke.io/gcp-service-account"]; ok && annotationValue == currentState.FullServiceAccountName {
+			// it's already there, don't need to do anything
+			return nil
+		}
+
+		// update service account
+		serviceAccount.Metadata.Annotations["iam.gke.io/gcp-service-account"] = currentState.FullServiceAccountName
+
+		err = kubeClient.Update(context.Background(), &serviceAccount)
+		if err != nil {
+			log.Warn().Err(err).Msgf("[%v] Service account %v.%v - Failed updating workload identity annotation", initiator, currentState.Name, *secret.Metadata.Namespace)
+			return err
+		}
+
+		return nil
+	}
 
 	return nil
 }

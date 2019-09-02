@@ -13,6 +13,13 @@ rules:
   - list
   - update
   - watch
+- apiGroups: [""] # "" indicates the core API group
+  resources:
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
