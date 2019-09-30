@@ -26,6 +26,7 @@ import (
 
 const annotationGCPServiceAccount string = "estafette.io/gcp-service-account"
 const annotationGCPServiceAccountName string = "estafette.io/gcp-service-account-name"
+const annotationGCPServiceAccountFilename string = "estafette.io/gcp-service-account-filename"
 const annotationGCPServiceAccountDisableKeyRotation string = "estafette.io/gcp-service-account-disable-key-rotation"
 const annotationGCPServiceAccountPermissions string = "estafette.io/gcp-service-account-permissions"
 const annotationGCPServiceAccountState string = "estafette.io/gcp-service-account-state"
@@ -34,6 +35,7 @@ const annotationGCPServiceAccountState string = "estafette.io/gcp-service-accoun
 type GCPServiceAccountState struct {
 	Enabled                string                        `json:"enabled"`
 	Name                   string                        `json:"name"`
+	Filename               string                        `json:"filename,omitempty"`
 	DisableKeyRotation     bool                          `json:"disableKeyRotation"`
 	FullServiceAccountName string                        `json:"fullServiceAccountName"`
 	Permissions            []GCPServiceAccountPermission `json:"permissions,omitempty"`
@@ -263,10 +265,15 @@ func getDesiredSecretState(secret *corev1.Secret) (state GCPServiceAccountState)
 		state.Name = ""
 	}
 
+	state.Filename, ok = secret.Metadata.Annotations[annotationGCPServiceAccountFilename]
+	if !ok {
+		state.Filename = "service-account-key.json"
+	}
+
 	disableKeyRotationValue, ok := secret.Metadata.Annotations[annotationGCPServiceAccountDisableKeyRotation]
 	if !ok {
 		state.DisableKeyRotation = false
-	} else{
+	} else {
 		var err error
 		state.DisableKeyRotation, err = strconv.ParseBool(disableKeyRotationValue)
 		if err != nil {
@@ -506,7 +513,11 @@ func makeSecretChangesRotateKeys(kubeClient *k8s.Client, iamService *GoogleCloud
 		}
 
 		// service account keyfile
-		secret.Data["service-account-key.json"] = decodedPrivateKeyData
+		filename := desiredState.Filename
+		if filename == "" {
+			filename = "service-account-key.json"
+		}
+		secret.Data[filename] = decodedPrivateKeyData
 
 		err = updateSecret(kubeClient, secret, *currentState, initiator)
 		if err != nil {
