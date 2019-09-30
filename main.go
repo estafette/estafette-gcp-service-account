@@ -467,12 +467,21 @@ func makeSecretChangesSetPermissions(kubeClient *k8s.Client, iamService *GoogleC
 
 func makeSecretChangesRotateKeys(kubeClient *k8s.Client, iamService *GoogleCloudIAMService, secret *corev1.Secret, initiator string, desiredState GCPServiceAccountState, currentState *GCPServiceAccountState, lastAttempt, lastRenewed time.Time, newAccount bool) (err error) {
 
+	filename := desiredState.Filename
+	if filename == "" {
+		filename = "service-account-key.json"
+	}
+	fileExists := false
+	if len(secret.Data) > 0 {
+		_, fileExists = secret.Data[filename]
+	}
+
 	// check if gcp-service-account is enabled for this secret, and a service account doesn't already exist
 	if (*mode == "normal" || *mode == "convenient" || *mode == "rotate_keys_only") &&
 		desiredState.Enabled == "true" &&
 		desiredState.Name != "" &&
 		(time.Since(lastAttempt).Minutes() > 15 || newAccount) &&
-		(len(secret.Data) == 0 || !*allowDisableKeyRotationOverride || !desiredState.DisableKeyRotation) &&
+		(!fileExists || !*allowDisableKeyRotationOverride || !desiredState.DisableKeyRotation) &&
 		currentState.FullServiceAccountName != "" &&
 		time.Since(lastRenewed).Hours() > float64(*keyRotationAfterHours) {
 
@@ -499,6 +508,7 @@ func makeSecretChangesRotateKeys(kubeClient *k8s.Client, iamService *GoogleCloud
 
 		// update the secret
 		currentState.LastRenewed = time.Now().Format(time.RFC3339)
+		currentState.Filename = filename
 
 		// store the key file
 		if secret.Data == nil {
