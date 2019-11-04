@@ -56,6 +56,7 @@ var (
 	purgeKeysAfterHours             = kingpin.Flag("purge-keys-after-hours", "How many hours before a key is purged.").Envar("PURGE_KEYS_AFTER_HOURS").Required().Int()
 	allowDisableKeyRotationOverride = kingpin.Flag("allow-disable-key-rotation-override", "If set on a per secret basis key rotation can be disabled with an annotation.").Default("false").OverrideDefaultFromEnvar("ALLOW_DISABLE_KEY_ROTATION_OVERRIDE").Bool()
 
+	appgroup  string
 	app       string
 	version   string
 	branch    string
@@ -114,7 +115,8 @@ func main() {
 	// parse command line parameters
 	kingpin.Parse()
 
-	foundation.InitLogging(app, version, branch, revision, buildDate)
+	// configure json logging
+	foundation.InitLogging(appgroup, app, version, branch, revision, buildDate)
 
 	// create kubernetes api client
 	kubeClient, err := k8s.NewInClusterClient()
