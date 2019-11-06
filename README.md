@@ -8,39 +8,27 @@ This small Kubernetes application creates and renews Let's Encrypt SSL certifica
 
 In order to create GCP service accounts and store their keyfiles in Kubernetes secrets. This improves developer self-service.
 
-## Usage
+## Installation
 
-As a Kubernetes administrator, you first need to deploy the rbac.yaml file which set role and permissions.
-Then deploy the application to Kubernetes cluster using the manifest below.
-
-```
-cat rbac.yaml | kubectl apply -f -
-```
-
-Create a google service account with keyfile and the following roles for bootstrapping only:
+Create a google service account with keyfile and the following roles:
 
 ```
 Service Account Admin
 Service Account Key Admin
 ```
 
-Create a secret with the bootstrap key only once:
+Prepare using Helm:
 
 ```
-cat bootstrap-secret.yaml | TEAM_NAME=tooling GOOGLE_SERVICE_ACCOUNT=<base64 encoded bootstrap service account keyfile> envsubst | kubectl apply -f -
+brew install kubernetes-helm
+kubectl -n kube-system create serviceaccount tiller
+kubectl create clusterrolebinding tiller --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
+helm init --service-account tiller --wait
 ```
 
-Then create the deployment and other resources with
+Then install or upgrade with Helm:
 
 ```
-cat kubernetes.yaml | TEAM_NAME=tooling SERVICE_ACCOUNT_PREFIX=dev SERVICE_ACCOUNT_PROJECT_ID=my-gcp-sa-container-project-id KEY_ROTATION_AFTER_HOURS=360 envsubst | kubectl apply -f -
+helm repo add estafette https://helm.estafette.io
+helm upgrade --install estafette-gcp-service-account --namespace estafette estafette/estafette-gcp-service-account
 ```
-
-The bootstrap service account will be replaced with a dedicated service account, which now needs the same roles as well:
-
-```
-Service Account Admin
-Service Account Key Admin
-```
-
-From now on the keys in the secrets will be rotated every KEY_ROTATION_AFTER_HOURS hours.
