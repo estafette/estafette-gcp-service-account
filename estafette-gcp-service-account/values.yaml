@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: nginx
+  repository: estafette/estafette-gcp-service-account
   # The tag can be set to override the appVersion getting used as the image tag
   tag:
   pullPolicy: IfNotPresent
