@@ -1,0 +1,94 @@
+# Default values for estafette-gcp-service-account.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: estafette/estafette-gcp-service-account
+  # The tag can be set to override the appVersion getting used as the image tag
+  tag:
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+rbac:
+  # Specifies whether roles and bindings should be created
+  enable: true
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 100Mi
+  limits:
+    cpu: 100m
+    memory: 350Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 10
+      preference:
+        matchExpressions:
+        - key: cloud.google.com/gke-preemptible
+          operator: In
+          values:
+          - "true"
+
+# pass (additional) arguments to the container
+extraArgs: []
+
+# use to set extra environment variables
+extraEnv: {}
+
+# use to add extra labels
+extraLabels: {}
+
+# use to add extra labels to podspec for getting their values in prometheus
+extraPodLabels: {}
+
+secret:
+  # sets a json keyfile for a gcp service account
+  googleServiceAccountKeyfileJson: "{}"
+
+# the mode determines whether the controller can create service accounts, sets iam roles for them and rotate keys or is allowed to do less
+# normal - can create service accounts and rotate keys
+# convenient - can set roles, create service accounts and rotate keys (risky)
+# rotate_keys_only - can rotate keys
+mode: normal
+
+# gcp project id for a centralized project to use for service accounts
+serviceAccountProjectID:
+
+# number of hours before a key gets rotated
+keyRotationAfterHours: 168
+
+# number of hours before old keys get purged from a service account; needs to be larger than the rotation; we set it to twice
+purgeKeysAfterHours: 336
+
+# if set to true secrets can be annotated to disable key rotation; useful for applications that don't handle key rotation well, otherwise they'll probably start erroring after the purgeKeysAfterHours number of hours after they started
+allowDisableKeyRotationOverride: true
