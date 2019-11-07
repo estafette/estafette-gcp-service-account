@@ -47,7 +47,7 @@ spec:
           {{- end }}
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /secrets/service-account-key.json
+              value: /gcp-service-account/service-account-key.json
             - name: MODE
               value: {{ .Values.mode | quote }}
             - name: SERVICE_ACCOUNT_PROJECT_ID
@@ -75,11 +75,11 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-          - name: app-secrets
-            mountPath: /secrets
+          - name: gcp-service-account-secret
+            mountPath: /gcp-service-account
       terminationGracePeriodSeconds: 300
       volumes:
-      - name: app-secrets
+      - name: gcp-service-account-secret
         secret:
           secretName: {{ include "estafette-gcp-service-account.fullname" . }}
       {{- with .Values.nodeSelector }}

@@ -72,6 +72,9 @@ extraLabels: {}
 extraPodLabels: {}
 
 secret:
+  # to use this controller to fetch it's own key files set this to true and leave googleServiceAccountKeyfileJson empty; can only be done after it's installed for a first time with keyfile
+  useGcpServiceAccountAnnotation: false
+
   # sets a json keyfile for a gcp service account
   googleServiceAccountKeyfileJson: '{"type": "service_account"}'
 
