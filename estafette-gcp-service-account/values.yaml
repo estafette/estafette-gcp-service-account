@@ -73,7 +73,7 @@ extraPodLabels: {}
 
 secret:
   # sets a json keyfile for a gcp service account
-  googleServiceAccountKeyfileJson: "{}"
+  googleServiceAccountKeyfileJson: '{"type": "service_account"}'
 
 # the mode determines whether the controller can create service accounts, sets iam roles for them and rotate keys or is allowed to do less
 # normal - can create service accounts and rotate keys
