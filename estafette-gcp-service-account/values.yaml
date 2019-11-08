@@ -2,6 +2,39 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+#
+# APPLICATION SETTINGS
+#
+
+# the mode determines whether the controller can create service accounts, sets iam roles for them and rotate keys or is allowed to do less
+# normal - can create service accounts and rotate keys
+# convenient - can set roles, create service accounts and rotate keys (risky)
+# rotate_keys_only - can rotate keys
+mode: normal
+
+# gcp project id for a centralized project to use for service accounts
+serviceAccountProjectID:
+
+# number of hours before a key gets rotated
+keyRotationAfterHours: 168
+
+# number of hours before old keys get purged from a service account; needs to be larger than the rotation; we set it to twice
+purgeKeysAfterHours: 336
+
+# if set to true secrets can be annotated to disable key rotation; useful for applications that don't handle key rotation well, otherwise they'll probably start erroring after the purgeKeysAfterHours number of hours after they started
+allowDisableKeyRotationOverride: true
+
+secret:
+  # to use this controller to fetch it's own key files set this to true and leave googleServiceAccountKeyfileJson empty; can only be done after it's installed for a first time with keyfile
+  useGcpServiceAccountAnnotation: false
+
+  # sets a json keyfile for a gcp service account
+  googleServiceAccountKeyfileJson: '{"type": "service_account"}'
+
+#
+# GENERIC SETTINGS
+#
+
 replicaCount: 1
 
 image:
@@ -70,28 +103,3 @@ extraLabels: {}
 
 # use to add extra labels to podspec for getting their values in prometheus
 extraPodLabels: {}
-
-secret:
-  # to use this controller to fetch it's own key files set this to true and leave googleServiceAccountKeyfileJson empty; can only be done after it's installed for a first time with keyfile
-  useGcpServiceAccountAnnotation: false
-
-  # sets a json keyfile for a gcp service account
-  googleServiceAccountKeyfileJson: '{"type": "service_account"}'
-
-# the mode determines whether the controller can create service accounts, sets iam roles for them and rotate keys or is allowed to do less
-# normal - can create service accounts and rotate keys
-# convenient - can set roles, create service accounts and rotate keys (risky)
-# rotate_keys_only - can rotate keys
-mode: normal
-
-# gcp project id for a centralized project to use for service accounts
-serviceAccountProjectID:
-
-# number of hours before a key gets rotated
-keyRotationAfterHours: 168
-
-# number of hours before old keys get purged from a service account; needs to be larger than the rotation; we set it to twice
-purgeKeysAfterHours: 336
-
-# if set to true secrets can be annotated to disable key rotation; useful for applications that don't handle key rotation well, otherwise they'll probably start erroring after the purgeKeysAfterHours number of hours after they started
-allowDisableKeyRotationOverride: true
