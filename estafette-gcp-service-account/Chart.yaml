@@ -3,4 +3,5 @@ appVersion: "1.0"
 description: Kubernetes controller to fetch GCP service account keyfiles for annotated secrets
 name: estafette-gcp-service-account
 version: 0.1.0
-icon: https://estafette.io/apple-touch-icon.png
+home: https://helm.estafette.io
+icon: https://helm.estafette.io/icon.png
