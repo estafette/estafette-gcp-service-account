@@ -10,3 +10,7 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# ignore build and helm artifacts
+/estafette-gcp-service-account
+/estafette-gcp-service-account-*.tgz
