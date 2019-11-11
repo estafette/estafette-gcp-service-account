@@ -25,6 +25,9 @@ purgeKeysAfterHours: 336
 allowDisableKeyRotationOverride: true
 
 secret:
+  # if set to true the values are already base64 encoded when provided, otherwise the template performs the base64 encoding
+  valuesAreBase64Encoded: false
+
   # to use this controller to fetch it's own key files set this to true and leave googleServiceAccountKeyfileJson empty; can only be done after it's installed for a first time with keyfile
   useGcpServiceAccountAnnotation: false
 
