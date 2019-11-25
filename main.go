@@ -115,8 +115,8 @@ func main() {
 	// parse command line parameters
 	kingpin.Parse()
 
-	// configure json logging
-	foundation.InitLogging(appgroup, app, version, branch, revision, buildDate)
+	// init log format from envvar ESTAFETTE_LOG_FORMAT
+	foundation.InitLoggingFromEnv(appgroup, app, version, branch, revision, buildDate)
 
 	// create kubernetes api client
 	kubeClient, err := k8s.NewInClusterClient()
