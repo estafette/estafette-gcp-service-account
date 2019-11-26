@@ -132,6 +132,9 @@ func main() {
 	}
 	request.Header.Add("Metadata-Flavor", "Google")
 	resp, err := client.Do(request)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
