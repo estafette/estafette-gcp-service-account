@@ -29,10 +29,10 @@ spec:
         prometheus.io/port: "9101"
         checksum/secrets: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
-    {{- with .Values.imagePullSecrets }}
+      {{- if .Values.imagePullSecret }}
       imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-    {{- end }}
+      - name: {{ include "estafette-gcp-service-account.fullname" . }}-image-pull-secret
+      {{- end }}
       serviceAccountName: {{ template "estafette-gcp-service-account.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}

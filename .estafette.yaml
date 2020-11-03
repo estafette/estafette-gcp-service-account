@@ -88,6 +88,10 @@ stages:
     action: test
     values: |-
       serviceAccountProjectID: my-project-id
+      imagePullSecret:
+        registryURL: https://index.docker.io/v1/
+        username: estafette.secret(ZZS9vKyEdC8m8Qtf.y3LuTU3EAYXUHWCd-ft2gJvJWaAvrspux1TsodBBdQ==.2Gn7U1HeTI_ZBSaU7uplaN1hxLuCGAk2LyW9FTyAZR9sVrkdEgwM23rebFIXAcntkFtFo6t2YbD7iifyyd1POpxQ)
+        password: estafette.secret(NqVcDeYWQkjvHOMY._RpygXd11e_g8UjHYZqZvBI-Q4fQ1018RAq5bikgiTLmyFITyjodEwy5w6JYZ0p-.0Ec1o1hGuP7f3lWadZ7MvUQnUZGlwl1mbz-pUAQknR3QM2mkLY1jrkSFGilQzDGp7GJ9LQhYqEyTeFTKzF-Mebur)
 
   clone-charts-repo:
     image: extensions/git-clone:dev
