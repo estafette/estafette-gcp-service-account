@@ -14,7 +14,7 @@ import (
 
 	"github.com/alecthomas/kingpin"
 	foundation "github.com/estafette/estafette-foundation"
-	"github.com/ommus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog/log"
 	"github.com/sethgrid/pester"
 	v1 "k8s.io/api/core/v1"
