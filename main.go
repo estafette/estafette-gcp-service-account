@@ -210,7 +210,7 @@ func watchSecrets(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Clientset
 			for {
 				event, ok := <-watcher.ResultChan()
 				if !ok {
-					log.Error().Err(err)
+					log.Warn().Msg("Watcher for secrets is closed")
 					break
 				}
 
