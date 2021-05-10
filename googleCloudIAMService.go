@@ -91,7 +91,7 @@ func (googleCloudIAMService *GoogleCloudIAMService) CreateServiceAccount(name st
 }
 
 // GetServiceAccountByDisplayName retrieves the full service account name based on the display name format '<local project id>/serviceAccountName'
-func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayName(name string) (fullServiceAccountName string, err error) {
+func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayName(name string) (fullServiceAccountName string, fullServiceAccountEmail string, err error) {
 
 	// generate structured display name to be able to retrieve the service account with random account id
 	_, displayName, err := googleCloudIAMService.getServiceAccountIDAndDisplayName(name)
@@ -137,11 +137,12 @@ func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayNa
 
 		// pick service account with highest unique id
 		fullServiceAccountName = matchingServiceAccounts[0].Name
+		fullServiceAccountEmail = matchingServiceAccounts[0].Email
 
 		return
 	}
 
-	return "", fmt.Errorf("There is no service account with display name %v in project %v", displayName, googleCloudIAMService.serviceAccountProjectID)
+	return "", "", fmt.Errorf("There is no service account with display name %v in project %v", displayName, googleCloudIAMService.serviceAccountProjectID)
 }
 
 // GetServiceAccountIDAndDisplayName generates account id and display name if mode is set to normal or convenient
