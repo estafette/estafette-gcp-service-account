@@ -34,7 +34,7 @@ const (
 	annotationGCPServiceAccountPermissions        string = "estafette.io/gcp-service-account-permissions"
 	annotationGCPServiceAccountState              string = "estafette.io/gcp-service-account-state"
 
-	annotationWorldloadIdentity string = "iam.gke.io/gcp-service-account"
+	annotationWorkloadIdentity string = "iam.gke.io/gcp-service-account"
 )
 
 // GCPServiceAccountState represents the state of the secret with respect to GCP service accounts
@@ -330,14 +330,14 @@ func getDesiredSecretState(secret *v1.Secret) (state GCPServiceAccountState) {
 func getCurrentSecretState(secret *v1.Secret) (state GCPServiceAccountState) {
 
 	// get state stored in annotations if present or set to empty struct
-	letsEncryptCertificateStateString, ok := secret.Annotations[annotationGCPServiceAccountState]
+	gcpServiceAccountStateString, ok := secret.Annotations[annotationGCPServiceAccountState]
 	if !ok {
 		// couldn't find saved state, setting to default struct
 		state = GCPServiceAccountState{}
 		return
 	}
 
-	if err := json.Unmarshal([]byte(letsEncryptCertificateStateString), &state); err != nil {
+	if err := json.Unmarshal([]byte(gcpServiceAccountStateString), &state); err != nil {
 		// couldn't deserialize, setting to default struct
 		state = GCPServiceAccountState{}
 		return
@@ -712,7 +712,7 @@ func listServiceAccounts(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Cl
 	// loop indefinitely
 	for {
 
-		// get secrets for all namespaces
+		// get serviceaccounts for all namespaces
 		log.Info().Msg("Listing serviceaccounts for all namespaces...")
 		serviceAccounts, err := kubeClientset.CoreV1().ServiceAccounts("").List(context.Background(), metav1.ListOptions{})
 		if err != nil {
@@ -720,7 +720,7 @@ func listServiceAccounts(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Cl
 		}
 		log.Info().Msgf("Cluster has %v serviceaccounts", len(serviceAccounts.Items))
 
-		// loop all secrets
+		// loop all serviceaccounts
 		for _, serviceAccount := range serviceAccounts.Items {
 			waitGroup.Add(1)
 			err := processServiceAccount(kubeClientset, iamService, &serviceAccount, "POLLER")
@@ -788,12 +788,12 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 
 		log.Info().Msgf("[%v] ServiceAccount %v.%v - Service account %v has been created in advance, fetching its identifier...", initiator, serviceAccount.Name, serviceAccount.Namespace, desiredState.Name)
 
-		// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
+		// 'lock' the serviceaccount for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the serviceaccount at the same time
 		currentState.LastAttempt = time.Now().Format(time.RFC3339)
 
 		err = updateServiceAccount(kubeClientset, serviceAccount, currentState, initiator)
 		if err != nil {
-			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
+			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": "annotate kubernetes serviceaccount", "type": "serviceaccount"}).Inc()
 			return
 		}
 
@@ -801,7 +801,7 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 		fullServiceAccountName, fullServiceAccountEmail, err := iamService.GetServiceAccountByDisplayName(desiredState.Name)
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed retrieving gcp service account %v by display name", desiredState.Name)
-			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
+			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": "annotate kubernetes serviceaccount", "type": "serviceaccount"}).Inc()
 			return err
 		}
 
@@ -815,11 +815,11 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 
 		err = updateServiceAccount(kubeClientset, serviceAccount, currentState, initiator)
 		if err != nil {
-			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
+			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": "annotate kubernetes serviceaccount", "type": "serviceaccount"}).Inc()
 			return err
 		}
 		log.Info().Msgf("[%v] SeviceAccount %v.%v - Service account email has been annotated in serviceAccount successfully...", initiator, serviceAccount.Name, serviceAccount.Namespace)
-		serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "succeeded", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
+		serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "succeeded", "initiator": initiator, "mode": "annotate kubernetes serviceaccount", "type": "serviceaccount"}).Inc()
 
 	}
 	return nil
@@ -831,6 +831,9 @@ func processServiceAccount(kubeClientset *kubernetes.Clientset, iamService *Goog
 		currentState := getCurrentServiceAccountState(serviceAccount)
 
 		err = makeServiceAccountChanges(kubeClientset, iamService, serviceAccount, initiator, desiredState, currentState)
+		if err != nil {
+			return
+		}
 
 	}
 	return nil
@@ -899,7 +902,7 @@ func updateServiceAccount(kubeClientset *kubernetes.Clientset, serviceAccount *v
 		return err
 	}
 	serviceAccount.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
-	serviceAccount.Annotations[annotationWorldloadIdentity] = currentState.FullServiceAccountEmail
+	serviceAccount.Annotations[annotationWorkloadIdentity] = currentState.FullServiceAccountEmail
 
 	kubeClientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Update(context.Background(), serviceAccount, metav1.UpdateOptions{})
 	if err != nil {
