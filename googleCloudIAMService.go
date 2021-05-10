@@ -111,7 +111,7 @@ func (googleCloudIAMService *GoogleCloudIAMService) GetServiceAccountByDisplayNa
 		}
 		resp, err := listCall.Context(context.Background()).Do()
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		// filter on display names
