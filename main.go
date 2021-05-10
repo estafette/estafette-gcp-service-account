@@ -44,7 +44,7 @@ type GCPServiceAccountState struct {
 	Filename                string                        `json:"filename,omitempty"`
 	DisableKeyRotation      bool                          `json:"disableKeyRotation"`
 	FullServiceAccountName  string                        `json:"fullServiceAccountName"`
-	fullServiceAccountEmail string                        `json:"fullServiceAccountEmail"`
+	FullServiceAccountEmail string                        `json:"fullServiceAccountEmail"`
 	Permissions             []GCPServiceAccountPermission `json:"permissions,omitempty"`
 	LastRenewed             string                        `json:"lastRenewed"`
 	LastAttempt             string                        `json:"lastAttempt"`
@@ -186,6 +186,8 @@ func main() {
 
 	// watch kubernetes service accounts for all namespaces
 	go watchServiceAccounts(waitGroup, kubeClientset, iamService)
+
+	go listServiceAccounts(waitGroup, kubeClientset, iamService)
 
 	foundation.HandleGracefulShutdown(gracefulShutdown, waitGroup)
 }
@@ -675,11 +677,11 @@ func watchServiceAccounts(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.C
 		if err != nil {
 			log.Error().Err(err)
 		} else {
-			// loop indefinitely, unless it erros
+			// loop indefinitely, unless it errors
 			for {
 				event, ok := <-watcher.ResultChan()
 				if !ok {
-					log.Warn().Msg("Watcher for secrets is closed")
+					log.Warn().Msg("Watcher for serviceaccount is closed")
 					break
 				}
 				if event.Type == watch.Added || event.Type == watch.Modified {
@@ -696,6 +698,41 @@ func watchServiceAccounts(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.C
 		}
 		// sleep random time between 22 and 37 seconds
 		sleepTime := foundation.ApplyJitter(30)
+		log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
+		time.Sleep(time.Duration(sleepTime) * time.Second)
+	}
+}
+
+func listServiceAccounts(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Clientset, iamService *GoogleCloudIAMService) {
+	// sleep random time before polling in order to avoid race conditions (look at waitgroups in the future)
+	sleepTime := foundation.ApplyJitter(30)
+	log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
+	time.Sleep(time.Duration(sleepTime) * time.Second)
+
+	// loop indefinitely
+	for {
+
+		// get secrets for all namespaces
+		log.Info().Msg("Listing serviceaccounts for all namespaces...")
+		serviceAccounts, err := kubeClientset.CoreV1().ServiceAccounts("").List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			log.Error().Err(err).Msg("listServiceAccounts call failed")
+		}
+		log.Info().Msgf("Cluster has %v serviceaccounts", len(serviceAccounts.Items))
+
+		// loop all secrets
+		for _, serviceAccount := range serviceAccounts.Items {
+			waitGroup.Add(1)
+			err := processServiceAccount(kubeClientset, iamService, &serviceAccount, "POLLER")
+			waitGroup.Done()
+
+			if err != nil {
+				log.Error().Err(err)
+			}
+		}
+
+		// sleep random time around 900 seconds
+		sleepTime := foundation.ApplyJitter(900)
 		log.Info().Msgf("Sleeping for %v seconds...", sleepTime)
 		time.Sleep(time.Duration(sleepTime) * time.Second)
 	}
@@ -747,7 +784,7 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 			lastAttempt = time.Time{}
 		}
 	}
-	if desiredState.Enabled == "true" && desiredState.Name != "" && time.Since(lastAttempt).Minutes() > 15 {
+	if desiredState.Enabled == "true" && desiredState.Name != "" && time.Since(lastAttempt).Minutes() > 15 && currentState.FullServiceAccountEmail == "" {
 
 		log.Info().Msgf("[%v] ServiceAccount %v.%v - Service account %v has been created in advance, fetching its identifier...", initiator, serviceAccount.Name, serviceAccount.Namespace, desiredState.Name)
 
@@ -772,7 +809,7 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 		currentState.Enabled = desiredState.Enabled
 		currentState.Name = desiredState.Name
 		currentState.FullServiceAccountName = fullServiceAccountName
-		currentState.fullServiceAccountEmail = fullServiceAccountEmail
+		currentState.FullServiceAccountEmail = fullServiceAccountEmail
 
 		log.Info().Msgf("[%v] ServiceAccount %v.%v - Updating serviceAccount because a new service account has been created...", initiator, serviceAccount.Name, serviceAccount.Namespace)
 
@@ -862,7 +899,7 @@ func updateServiceAccount(kubeClientset *kubernetes.Clientset, serviceAccount *v
 		return err
 	}
 	serviceAccount.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
-	serviceAccount.Annotations[annotationWorldloadIdentity] = currentState.fullServiceAccountEmail
+	serviceAccount.Annotations[annotationWorldloadIdentity] = currentState.FullServiceAccountEmail
 
 	kubeClientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Update(context.Background(), serviceAccount, metav1.UpdateOptions{})
 	if err != nil {
