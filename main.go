@@ -288,22 +288,22 @@ func getDesiredSecretState(secret *v1.Secret) (state GCPServiceAccountState) {
 	var ok bool
 
 	// get annotations or set default value
-	state.Enabled, ok = secret.Annotations[annotationGCPServiceAccount]
+	state.Enabled, ok = secret.ObjectMeta.Annotations[annotationGCPServiceAccount]
 	if !ok {
 		state.Enabled = "false"
 	}
 
-	state.Name, ok = secret.Annotations[annotationGCPServiceAccountName]
+	state.Name, ok = secret.ObjectMeta.Annotations[annotationGCPServiceAccountName]
 	if !ok {
 		state.Name = ""
 	}
 
-	state.Filename, ok = secret.Annotations[annotationGCPServiceAccountFilename]
+	state.Filename, ok = secret.ObjectMeta.Annotations[annotationGCPServiceAccountFilename]
 	if !ok {
 		state.Filename = "service-account-key.json"
 	}
 
-	disableKeyRotationValue, ok := secret.Annotations[annotationGCPServiceAccountDisableKeyRotation]
+	disableKeyRotationValue, ok := secret.ObjectMeta.Annotations[annotationGCPServiceAccountDisableKeyRotation]
 	if !ok {
 		state.DisableKeyRotation = false
 	} else {
@@ -314,7 +314,7 @@ func getDesiredSecretState(secret *v1.Secret) (state GCPServiceAccountState) {
 		}
 	}
 
-	serviceAccountPermissionsString, ok := secret.Annotations[annotationGCPServiceAccountPermissions]
+	serviceAccountPermissionsString, ok := secret.ObjectMeta.Annotations[annotationGCPServiceAccountPermissions]
 	if !ok {
 		state.Permissions = []GCPServiceAccountPermission{}
 	} else {
@@ -330,7 +330,7 @@ func getDesiredSecretState(secret *v1.Secret) (state GCPServiceAccountState) {
 func getCurrentSecretState(secret *v1.Secret) (state GCPServiceAccountState) {
 
 	// get state stored in annotations if present or set to empty struct
-	gcpServiceAccountStateString, ok := secret.Annotations[annotationGCPServiceAccountState]
+	gcpServiceAccountStateString, ok := secret.ObjectMeta.Annotations[annotationGCPServiceAccountState]
 	if !ok {
 		// couldn't find saved state, setting to default struct
 		state = GCPServiceAccountState{}
@@ -621,7 +621,7 @@ func makeSecretChangesPurgeKeys(kubeClientset *kubernetes.Clientset, iamService 
 
 func processSecret(kubeClientset *kubernetes.Clientset, iamService *GoogleCloudIAMService, secret *v1.Secret, initiator string) (err error) {
 
-	if secret != nil && secret.Annotations != nil {
+	if secret != nil && secret.ObjectMeta.Annotations != nil {
 
 		desiredState := getDesiredSecretState(secret)
 		currentState := getCurrentSecretState(secret)
@@ -639,7 +639,7 @@ func deleteSecret(kubeClientset *kubernetes.Clientset, iamService *GoogleCloudIA
 
 	log.Info().Msgf("[%v] Secret %v.%v - Deleting service account because secret has been deleted...", initiator, secret.Name, secret.Namespace)
 
-	if (*mode == "normal" || *mode == "convenient") && secret != nil && secret.Annotations != nil {
+	if (*mode == "normal" || *mode == "convenient") && secret != nil && secret.ObjectMeta.Annotations != nil {
 
 		currentState := getCurrentSecretState(secret)
 
@@ -741,12 +741,12 @@ func listServiceAccounts(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Cl
 func getDesiredServiceAccountState(serviceAccount *v1.ServiceAccount) (state GCPServiceAccountState) {
 	var ok bool
 	// get annotations or set default value
-	state.Enabled, ok = serviceAccount.Annotations[annotationGCPServiceAccount]
+	state.Enabled, ok = serviceAccount.ObjectMeta.Annotations[annotationGCPServiceAccount]
 	if !ok {
 		state.Enabled = "false"
 	}
 
-	state.Name, ok = serviceAccount.Annotations[annotationGCPServiceAccountName]
+	state.Name, ok = serviceAccount.ObjectMeta.Annotations[annotationGCPServiceAccountName]
 	if !ok {
 		state.Name = ""
 	}
@@ -757,7 +757,7 @@ func getDesiredServiceAccountState(serviceAccount *v1.ServiceAccount) (state GCP
 func getCurrentServiceAccountState(serviceAccount *v1.ServiceAccount) (state GCPServiceAccountState) {
 
 	// get state stored in annotations if present or set to empty struct
-	gcpServiceAccountStateString, ok := serviceAccount.Annotations[annotationGCPServiceAccountState]
+	gcpServiceAccountStateString, ok := serviceAccount.ObjectMeta.Annotations[annotationGCPServiceAccountState]
 	if !ok {
 		// couldn't find saved state, setting to default struct
 		state = GCPServiceAccountState{}
@@ -826,7 +826,7 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 }
 
 func processServiceAccount(kubeClientset *kubernetes.Clientset, iamService *GoogleCloudIAMService, serviceAccount *v1.ServiceAccount, initiator string) (err error) {
-	if serviceAccount != nil && serviceAccount.Annotations != nil {
+	if serviceAccount != nil && serviceAccount.ObjectMeta.Annotations != nil {
 		desiredState := getDesiredServiceAccountState(serviceAccount)
 		currentState := getCurrentServiceAccountState(serviceAccount)
 
@@ -873,7 +873,7 @@ func updateSecret(kubeClientset *kubernetes.Clientset, secret *v1.Secret, curren
 		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed marshalling current state %v", initiator, secret.Name, secret.Namespace, currentState)
 		return err
 	}
-	secret.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
+	secret.ObjectMeta.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
 
 	// update secret, with last attempt; this will fire an event for the watcher, but this shouldn't lead to any action because storing the last attempt locks the secret for 15 minutes
 	// err = kubeClientset.Update(context.Background(), secret)
@@ -901,8 +901,8 @@ func updateServiceAccount(kubeClientset *kubernetes.Clientset, serviceAccount *v
 		log.Error().Err(err).Msgf("Kubernetes service account %v.%v - Failed marshalling current state %v", serviceAccount.Name, serviceAccount.Namespace, currentState)
 		return err
 	}
-	serviceAccount.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
-	serviceAccount.Annotations[annotationWorkloadIdentity] = currentState.FullServiceAccountEmail
+	serviceAccount.ObjectMeta.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
+	serviceAccount.ObjectMeta.Annotations[annotationWorkloadIdentity] = currentState.FullServiceAccountEmail
 
 	kubeClientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Update(context.Background(), serviceAccount, metav1.UpdateOptions{})
 	if err != nil {
