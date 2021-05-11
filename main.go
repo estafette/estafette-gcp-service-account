@@ -401,7 +401,7 @@ func makeSecretChangesGetOrCreateServiceAccount(kubeClientset *kubernetes.Client
 		// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
 		currentState.LastAttempt = time.Now().Format(time.RFC3339)
 
-		err = updateSecret(kubeClientset, secret, *currentState, initiator)
+		secret, err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
 			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
 			return
@@ -422,7 +422,7 @@ func makeSecretChangesGetOrCreateServiceAccount(kubeClientset *kubernetes.Client
 
 		log.Info().Msgf("[%v] Secret %v.%v - Updating secret because a new service account has been created...", initiator, secret.Name, secret.Namespace)
 
-		err = updateSecret(kubeClientset, secret, *currentState, initiator)
+		secret, err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
 			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
 			return false, err
@@ -443,7 +443,7 @@ func makeSecretChangesGetOrCreateServiceAccount(kubeClientset *kubernetes.Client
 		// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
 		currentState.LastAttempt = time.Now().Format(time.RFC3339)
 
-		err = updateSecret(kubeClientset, secret, *currentState, initiator)
+		secret, err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
 			serviceAccountCreateTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
 			return
@@ -464,7 +464,7 @@ func makeSecretChangesGetOrCreateServiceAccount(kubeClientset *kubernetes.Client
 
 		log.Info().Msgf("[%v] Secret %v.%v - Updating secret because a new service account has been created...", initiator, secret.Name, secret.Namespace)
 
-		err = updateSecret(kubeClientset, secret, *currentState, initiator)
+		secret, err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
 			serviceAccountCreateTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
 			return false, err
@@ -524,7 +524,7 @@ func makeSecretChangesRotateKeys(kubeClientset *kubernetes.Clientset, iamService
 			// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
 			currentState.LastAttempt = time.Now().Format(time.RFC3339)
 
-			err = updateSecret(kubeClientset, secret, *currentState, initiator)
+			secret, err = updateSecret(kubeClientset, secret, *currentState, initiator)
 			if err != nil {
 				keyRotationTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
 				return
@@ -562,7 +562,7 @@ func makeSecretChangesRotateKeys(kubeClientset *kubernetes.Clientset, iamService
 		}
 		secret.Data[filename] = decodedPrivateKeyData
 
-		err = updateSecret(kubeClientset, secret, *currentState, initiator)
+		secret, err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
 			keyRotationTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
 			return err
@@ -595,7 +595,7 @@ func makeSecretChangesPurgeKeys(kubeClientset *kubernetes.Clientset, iamService 
 		// 'lock' the secret for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the secret at the same time
 		currentState.LastAttempt = time.Now().Format(time.RFC3339)
 
-		err = updateSecret(kubeClientset, secret, *currentState, initiator)
+		secret, err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
 			keyPurgeTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
 			return err
@@ -668,8 +668,6 @@ func watchServiceAccounts(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.C
 	for {
 		log.Info().Msg("Watching serviceaccounts for all namespaces...")
 		timeoutSeconds := int64(300)
-
-		log.Info().Msg("Watching serviceaccount for all namespaces...")
 		watcher, err := kubeClientset.CoreV1().ServiceAccounts("").Watch(context.Background(), metav1.ListOptions{
 			TimeoutSeconds: &timeoutSeconds,
 		})
@@ -791,7 +789,7 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 		// 'lock' the serviceaccount for 15 minutes by storing the last attempt timestamp to prevent hitting the rate limit if the Google Cloud IAM api call fails and to prevent the watcher and the fallback polling to operate on the serviceaccount at the same time
 		currentState.LastAttempt = time.Now().Format(time.RFC3339)
 
-		err = updateServiceAccount(kubeClientset, serviceAccount, currentState, initiator)
+		serviceAccount, err = updateServiceAccount(kubeClientset, serviceAccount, currentState, initiator)
 		if err != nil {
 			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": "annotate kubernetes serviceaccount", "type": "serviceaccount"}).Inc()
 			return
@@ -813,7 +811,7 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 
 		log.Info().Msgf("[%v] ServiceAccount %v.%v - Updating serviceAccount because a new service account has been created...", initiator, serviceAccount.Name, serviceAccount.Namespace)
 
-		err = updateServiceAccount(kubeClientset, serviceAccount, currentState, initiator)
+		serviceAccount, err = updateServiceAccount(kubeClientset, serviceAccount, currentState, initiator)
 		if err != nil {
 			serviceAccountRetrieveTotals.With(prometheus.Labels{"namespace": serviceAccount.Namespace, "status": "failed", "initiator": initiator, "mode": "annotate kubernetes serviceaccount", "type": "serviceaccount"}).Inc()
 			return err
@@ -866,12 +864,12 @@ func randStringBytesMaskImprSrc(n int) string {
 	return string(b)
 }
 
-func updateSecret(kubeClientset *kubernetes.Clientset, secret *v1.Secret, currentState GCPServiceAccountState, initiator string) error {
+func updateSecret(kubeClientset *kubernetes.Clientset, secret *v1.Secret, currentState GCPServiceAccountState, initiator string) (newSecret *v1.Secret, err error) {
 	// serialize state and store it in the annotation
 	gcpServiceAccountStateByteArray, err := json.Marshal(currentState)
 	if err != nil {
 		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed marshalling current state %v", initiator, secret.Name, secret.Namespace, currentState)
-		return err
+		return nil, err
 	}
 	secret.ObjectMeta.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
 
@@ -880,34 +878,34 @@ func updateSecret(kubeClientset *kubernetes.Clientset, secret *v1.Secret, curren
 	_, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Update(context.Background(), secret, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed updating current state in secret", initiator, secret.Name, secret.Namespace)
-		return err
+		return nil, err
 	}
 
 	// refresh secret after update
-	_, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
+	secret, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
 
 	if err != nil {
 		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed refreshing secret after update", initiator, secret.Name, secret.Namespace)
-		return err
+		return nil, err
 	}
 
-	return nil
+	return
 }
 
-func updateServiceAccount(kubeClientset *kubernetes.Clientset, serviceAccount *v1.ServiceAccount, currentState GCPServiceAccountState, initiator string) error {
+func updateServiceAccount(kubeClientset *kubernetes.Clientset, serviceAccount *v1.ServiceAccount, currentState GCPServiceAccountState, initiator string) (newServiceAccount *v1.ServiceAccount, err error) {
 	// serialize state and store it in the annotation
 	gcpServiceAccountStateByteArray, err := json.Marshal(currentState)
 	if err != nil {
 		log.Error().Err(err).Msgf("Kubernetes service account %v.%v - Failed marshalling current state %v", serviceAccount.Name, serviceAccount.Namespace, currentState)
-		return err
+		return nil, err
 	}
 	serviceAccount.ObjectMeta.Annotations[annotationGCPServiceAccountState] = string(gcpServiceAccountStateByteArray)
 	serviceAccount.ObjectMeta.Annotations[annotationWorkloadIdentity] = currentState.FullServiceAccountEmail
 
-	kubeClientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Update(context.Background(), serviceAccount, metav1.UpdateOptions{})
+	serviceAccount, err = kubeClientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Update(context.Background(), serviceAccount, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msgf("[%v] ServiceAccount %v.%v - Failed updating current state in serviceAccount", initiator, serviceAccount.Name, serviceAccount.Namespace)
-		return err
+		return nil, err
 	}
-	return nil
+	return
 }
