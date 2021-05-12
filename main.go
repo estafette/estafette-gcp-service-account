@@ -198,7 +198,6 @@ func watchSecrets(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Clientset
 	for {
 		log.Info().Msg("Watching secrets for all namespaces...")
 		timeoutSeconds := int64(300)
-		var secret *v1.Secret
 		watcher, err := kubeClientset.CoreV1().Secrets("").Watch(context.Background(), metav1.ListOptions{
 			TimeoutSeconds: &timeoutSeconds,
 		})
@@ -209,17 +208,18 @@ func watchSecrets(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Clientset
 			// loop indefinitely, unless it errors
 			for {
 				event, ok := <-watcher.ResultChan()
-				secret, ok := event.Object.(*v1.Secret)
 				if !ok {
 					log.Warn().Msg("Watcher for secrets is closed")
 					break
 				}
 
+				secret, ok := event.Object.(*v1.Secret)
+				if !ok {
+					log.Warn().Msg("Watcher for secrets returns event object of incorrect type")
+					break
+				}
+
 				if event.Type == watch.Added || event.Type == watch.Modified {
-					if !ok {
-						log.Warn().Msg("Watcher for secrets returns event object of incorrect type")
-						break
-					}
 					waitGroup.Add(1)
 					err := processSecret(kubeClientset, iamService, secret, fmt.Sprintf("watcher:%v", event.Type))
 					waitGroup.Done()
