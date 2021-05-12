@@ -209,13 +209,13 @@ func watchSecrets(waitGroup *sync.WaitGroup, kubeClientset *kubernetes.Clientset
 			// loop indefinitely, unless it errors
 			for {
 				event, ok := <-watcher.ResultChan()
+				secret, ok := event.Object.(*v1.Secret)
 				if !ok {
 					log.Warn().Msg("Watcher for secrets is closed")
 					break
 				}
 
 				if event.Type == watch.Added || event.Type == watch.Modified {
-					secret, ok := event.Object.(*v1.Secret)
 					if !ok {
 						log.Warn().Msg("Watcher for secrets returns event object of incorrect type")
 						break
