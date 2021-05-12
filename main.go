@@ -182,12 +182,12 @@ func main() {
 	// watch kubernetes secrets for all namespaces
 	go watchSecrets(waitGroup, kubeClientset, iamService)
 
-	// go listSecrets(waitGroup, kubeClientset, iamService)
+	go listSecrets(waitGroup, kubeClientset, iamService)
 
 	// watch kubernetes service accounts for all namespaces
 	go watchServiceAccounts(waitGroup, kubeClientset, iamService)
 
-	// go listServiceAccounts(waitGroup, kubeClientset, iamService)
+	go listServiceAccounts(waitGroup, kubeClientset, iamService)
 
 	foundation.HandleGracefulShutdown(gracefulShutdown, waitGroup)
 }
@@ -415,6 +415,13 @@ func makeSecretChangesGetOrCreateServiceAccount(kubeClientset *kubernetes.Client
 			return false, err
 		}
 
+		// reload secret to avoid object has been modified error
+		secret, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
+		if err != nil {
+			log.Error().Err(err)
+			return false, err
+		}
+
 		// update the secret
 		currentState.Enabled = desiredState.Enabled
 		currentState.Name = desiredState.Name
@@ -454,6 +461,13 @@ func makeSecretChangesGetOrCreateServiceAccount(kubeClientset *kubernetes.Client
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed creating service account %v", desiredState.Name)
 			serviceAccountCreateTotals.With(prometheus.Labels{"namespace": secret.Namespace, "status": "failed", "initiator": initiator, "mode": *mode, "type": "secret"}).Inc()
+			return false, err
+		}
+
+		// reload secret to avoid object has been modified error
+		secret, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
+		if err != nil {
+			log.Error().Err(err)
 			return false, err
 		}
 
@@ -561,6 +575,13 @@ func makeSecretChangesRotateKeys(kubeClientset *kubernetes.Clientset, iamService
 			filename = "service-account-key.json"
 		}
 		secret.Data[filename] = decodedPrivateKeyData
+
+		// reload secret to avoid object has been modified error
+		secret, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
+		if err != nil {
+			log.Error().Err(err)
+			return err
+		}
 
 		err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
@@ -803,6 +824,13 @@ func makeServiceAccountChanges(kubeClientset *kubernetes.Clientset, iamService *
 			return err
 		}
 
+		// reload serviceAccount to avoid object has been modified error
+		serviceAccount, err = kubeClientset.CoreV1().ServiceAccounts(serviceAccount.Namespace).Get(context.Background(), serviceAccount.Name, metav1.GetOptions{})
+		if err != nil {
+			log.Error().Err(err)
+			return err
+		}
+
 		// update the serviceAccount
 		currentState.Enabled = desiredState.Enabled
 		currentState.Name = desiredState.Name
@@ -877,14 +905,6 @@ func updateSecret(kubeClientset *kubernetes.Clientset, secret *v1.Secret, curren
 	_, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Update(context.Background(), secret, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed updating current state in secret", initiator, secret.Name, secret.Namespace)
-		return err
-	}
-
-	// refresh secret after update
-	_, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
-
-	if err != nil {
-		log.Error().Err(err).Msgf("[%v] Secret %v.%v - Failed refreshing secret after update", initiator, secret.Name, secret.Namespace)
 		return err
 	}
 
