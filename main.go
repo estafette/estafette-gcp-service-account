@@ -553,6 +553,13 @@ func makeSecretChangesRotateKeys(kubeClientset *kubernetes.Clientset, iamService
 			return err
 		}
 
+		// reload secret to avoid object has been modified error
+		secret, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
+		if err != nil {
+			log.Error().Err(err)
+			return err
+		}
+
 		// update the secret
 		currentState.LastRenewed = time.Now().Format(time.RFC3339)
 		currentState.Filename = filename
@@ -575,13 +582,6 @@ func makeSecretChangesRotateKeys(kubeClientset *kubernetes.Clientset, iamService
 			filename = "service-account-key.json"
 		}
 		secret.Data[filename] = decodedPrivateKeyData
-
-		// reload secret to avoid object has been modified error
-		secret, err = kubeClientset.CoreV1().Secrets(secret.Namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
-		if err != nil {
-			log.Error().Err(err)
-			return err
-		}
 
 		err = updateSecret(kubeClientset, secret, *currentState, initiator)
 		if err != nil {
