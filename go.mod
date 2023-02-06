@@ -10,9 +10,9 @@ require (
 	github.com/rs/zerolog v1.17.2
 	github.com/sethgrid/pester v1.1.0
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/oauth2 v0.0.0-20191202225959-858c2ad4c8b6
-	google.golang.org/api v0.15.0
-	k8s.io/api v0.19.2
+	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
+	google.golang.org/api v0.20.0
+	k8s.io/api v0.20.0
 	k8s.io/apimachinery v0.21.0
-	k8s.io/client-go v0.19.2
+	k8s.io/client-go v0.20.0
 )
